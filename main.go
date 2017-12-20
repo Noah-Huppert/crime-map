@@ -9,6 +9,8 @@ import (
 	pdf "github.com/unidoc/unidoc/pdf/model"
 )
 
+// TODO: Document code more
+
 const file = "data/2017-10-12.pdf"
 
 func main() {
@@ -20,6 +22,8 @@ func main() {
 	}
 }
 
+// TODO: Make fn return a list of crimes in pdf
+// TODO: Break up inspectPdf into smaller fns
 func inspectPdf(inputPath string) error {
 	// Open file
 	pdfFile, err := os.Open(inputPath)
@@ -156,6 +160,7 @@ func inspectPdf(inputPath string) error {
 		// Set fields
 		crime := Crime{}
 
+		// TODO: Parse into more meaningful data types
 		crime.DateReported = fields[0]
 		crime.Location = fields[1]
 		crime.ReportID = fields[2]
