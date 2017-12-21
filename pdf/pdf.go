@@ -69,6 +69,29 @@ func (p Pdf) Parse() ([]string, error) {
 		return p.fields, fmt.Errorf("error creating pdf reader: %s", err.Error())
 	}
 
+	// Determine if pdf is encrypted
+	isEncrypted, err := pdfReader.IsEncrypted()
+	if err != nil {
+		return p.fields, fmt.Errorf("error determining pdf file "+
+			"encryption status: %s", err.Error())
+	}
+
+	// If encrypted, try decrypting with empty password
+	if isEncrypted {
+		// Attempt
+		auth, err := pdfReader.Decrypt([]byte(""))
+		if err != nil {
+			return p.fields, fmt.Errorf("error decrypting pdf "+
+				"file: %s", err.Error())
+		}
+
+		// Verify successful decryption
+		if !auth {
+			return p.fields, errors.New("unable to decrypt pdf " +
+				"file with empty password")
+		}
+	}
+
 	// Get number of pages
 	numPages, err := pdfReader.GetNumPages()
 	if err != nil {
