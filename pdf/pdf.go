@@ -3,15 +3,11 @@ package pdf
 import (
 	"errors"
 	"fmt"
+	pdfcontent "github.com/unidoc/unidoc/pdf/contentstream"
+	pdfcore "github.com/unidoc/unidoc/pdf/core"
 	pdf "github.com/unidoc/unidoc/pdf/model"
 	"os"
 )
-
-// textFieldStartToken is the rune which all Pdf text fields start with
-const textFieldStartToken rune = '('
-
-// textFieldEndToken is the rune which all Pdf text fields ends with
-const textFieldEndToken rune = ')'
 
 // Pdf holds data about a pdf file
 type Pdf struct {
@@ -115,20 +111,25 @@ func (p Pdf) Parse() ([]string, error) {
 				err.Error())
 		}
 
-		// Loop through streams and extract text fields
-		inTxtField := false
-		field := ""
-		for _, r := range []rune(streams) {
-			// If start
-			if r == textFieldStartToken {
-				inTxtField = true
-			} else if r == textFieldEndToken {
-				p.fields = append(p.fields, field)
+		// Parse contents
+		parser := pdfcontent.NewContentStreamParser(streams)
+		ops, err := parser.Parse()
+		if err != nil {
+			return p.fields, fmt.Errorf("error parsing content "+
+				"stream: %s", err.Error())
+		}
 
-				field = ""
-				inTxtField = false
-			} else if inTxtField {
-				field += string(r)
+		// Loop through text
+		for _, op := range *ops {
+			// Check text field
+			if op.Operand == "Tj" && len(op.Params) == 1 {
+				val, ok := op.Params[0].(*pdfcore.PdfObjectString)
+				if !ok {
+					return p.fields, errors.New("error " +
+						"casting pdf text field to string")
+				}
+
+				p.fields = append(p.fields, string(*val))
 			}
 		}
 	}
