@@ -26,7 +26,7 @@ const headerTitle string = "Student Right To Know Case Log Daily Report"
 // Footer constants
 // footerPageNumExpr holds the regexp used to match page numbers at the bottom
 // of the header
-var footerPageNumExpr *regexp.Regexp = regexp.MustCompile("^[0-9]+[^/]$")
+var footerPageNumExpr *regexp.Regexp = regexp.MustCompile("^[0-9]+$")
 
 // footerPageNumLabel holds the text which appears at the bottom of a footer
 const footerPageNumLabel string = "Page No."
@@ -81,21 +81,27 @@ func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
 
 	// Loop through fields
 	for _, field := range fields {
-		// Add to globber
-		globber = append(globber, field)
-
-		// Check if footerGlobber is getting too big
-		if footerGlobLength > 6 {
-			footerGlobber = []string{}
-		}
 		// TODO fix footer being in middle of other fields issue
 
 		// Check if field is a number
-		if footerPageNumExpr.MatchString(field) {
+		if footerGlobLength == 0 &&
+			footerPageNumExpr.MatchString(field) {
 			// Reset and add to footer globber
 			footerGlobber = []string{field}
-		} else if footerGlobLength > 0 { // Check if footer globber is filling
+		} else if (footerGlobLength == 1 &&
+			field == footerPageNumLabel) ||
+			(footerGlobLength == 2 &&
+				footerTimeExpr.MatchString(field)) ||
+			(footerGlobLength == 3 &&
+				footerDateExpr.MatchString(field)) ||
+			(footerGlobLength == 4 &&
+				field == footerPrintLabel) ||
+			(footerGlobLength == 5 &&
+				field == footerPrintLabel2) { // Check if footer globber is filling
 			footerGlobber = append(footerGlobber, field)
+		} else {
+			// Add to globber
+			globber = append(globber, field)
 		}
 
 		footerGlobLength = len(footerGlobber)
@@ -103,6 +109,7 @@ func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
 
 		// Check if globber contains a header
 		fmt.Printf("%d || %d | ", globLength, footerGlobLength)
+		fmt.Println(field)
 		if globLength == 4 &&
 			headerDateRangeExpr.MatchString(globber[0]) &&
 			globber[1] == headerUnivName &&
@@ -111,6 +118,7 @@ func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
 			// If header, just reset globber
 			fmt.Println("===== ^HEADER^ =====\n")
 			globber = []string{}
+			footerGlobber = []string{}
 		} else if footerGlobLength == 6 && // Check if globber contains footer
 			footerGlobber[1] == footerPageNumLabel &&
 			footerTimeExpr.MatchString(footerGlobber[2]) &&
@@ -120,7 +128,12 @@ func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
 			// If footer, just reset globber
 			fmt.Println("===== ^FOOTER^ =====\n")
 			footerGlobber = []string{}
-			globber = globber[:globLength-6]
+
+			if globLength >= 6 {
+				globber = globber[:globLength-6]
+			} else {
+				globber = []string{}
+			}
 		} else if globLength == 7 && // Check if globber contains first part of crime data
 			globber[0] == fieldLabelReported &&
 			globber[1] == fieldLabelID &&
@@ -167,8 +180,6 @@ func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
 				strings.Join(synopsis, ","),
 				disposition)
 			globber = []string{}
-		} else {
-			fmt.Println(field)
 		}
 	}
 
