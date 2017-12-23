@@ -3,6 +3,7 @@ package crime
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Crime structs hold information about criminal activity reported by Clery
@@ -10,14 +11,23 @@ import (
 type Crime struct {
 	// DateReported records when the criminal activity was disclosed to the
 	// police
-	DateReported string
+	DateReported time.Time
 
-	// DateOccurred records when the criminal activity took place
-	DateOccurred string
+	// DateOccurredStart records when the criminal activity started taking
+	// place
+	DateOccurredStart time.Time
 
-	// ReportID is the unique ID used to identify the criminal activity
-	// report in the reporting institution's internal system
-	ReportID string
+	// DateOccurredEnd records when the criminal activity stopped taking
+	// place
+	DateOccurredEnd time.Time
+
+	// ReportSuperID is the first portion of police report ID associated
+	// with the reported crime.
+	ReportSuperID uint
+
+	// ReportID is the second portion of the police report ID associated
+	// with the reported crime
+	ReportID uint
 
 	// Location is the place where the criminal activity occurred
 	Location string
@@ -37,14 +47,17 @@ type Crime struct {
 
 func (c Crime) String() string {
 	return fmt.Sprintf("Reported: %s\n"+
-		"Occurred: %s\n"+
-		"ID: %s\n"+
+		"Occurred Start: %s\n"+
+		"Occurred End: %s\n"+
+		"ID: %d-%d\n"+
 		"Location: %s\n"+
 		"Incidents: %s\n"+
 		"Description: %s\n"+
 		"Remediation: %s",
 		c.DateReported,
-		c.DateOccurred,
+		c.DateOccurredStart,
+		c.DateOccurredEnd,
+		c.ReportSuperID,
 		c.ReportID,
 		c.Location,
 		strings.Join(c.Incidents, ","),

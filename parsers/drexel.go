@@ -4,12 +4,20 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/Noah-Huppert/crime-map/crime"
 )
 
 // headerDateRangeExpr is the regexp used to match a report header's first line
 var headerDateRangeExpr *regexp.Regexp = regexp.MustCompile("^From [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4} to [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}\\.$")
+
+// dateExpr is the regexp used to match a date in the pdf report
+var dateExpr *regexp.Regexp = regexp.MustCompile("^([0-9]{2})\\/([0-9]{2})\\/([0-9]{2}) - [A-Z]+ at ([0-9]{2}):([0-9]{2})$")
+
+// dateRangeExpr is the regexp used to extract 2 dates in a report date range
+var dateRangeExpr *regexp.Regexp = regexp.MustCompile("^(.*[0-9]) - ([0-9].*)$")
 
 // footerPageNumExpr holds the regexp used to match page numbers at the bottom
 // of the header
@@ -82,13 +90,48 @@ func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
 		} else if consumeGlob1 { // Check if we are consuming glob 1
 			// If consuming date reported field
 			if consume == 4 {
-				c.DateReported = field
+				d, err := parseDate(field)
+				if err != nil {
+					return crimes, fmt.Errorf("error parsing"+
+						" reported at field: %s",
+						err.Error())
+				}
+
+				c.DateReported = *d
 				consume--
 			} else if consume == 3 { // If consuming location field
 				c.Location = field
 				consume--
 			} else if consume == 2 { // If consuming report ID field
-				c.ReportID = field
+				// Split by dash
+				parts := strings.Split(field, "-")
+
+				// Check correct number of parts
+				if len(parts) != 2 {
+					return crimes, fmt.Errorf("report ID "+
+						"field has incorrect number of"+
+						" parts, field: %s, parts: %d, "+
+						" expected parts: 2",
+						field, len(parts))
+				}
+
+				// Parse both ids
+				id, err := strconv.ParseUint(parts[0], 10, 64)
+				if err != nil {
+					return crimes, fmt.Errorf("error parsing "+
+						"report super ID into uint: %s",
+						err.Error())
+				}
+				c.ReportSuperID = uint(id)
+
+				id, err = strconv.ParseUint(parts[1], 10, 64)
+				if err != nil {
+					return crimes, fmt.Errorf("error parsing "+
+						"report Id into uint: %s",
+						err.Error())
+				}
+				c.ReportID = uint(id)
+
 				consume--
 			} else if consume == 1 { // If consuming incidents field
 				c.Incidents = []string{field}
@@ -99,7 +142,37 @@ func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
 			}
 		} else if consumeDOccurred { // Check if we are consuming date
 			// occurred
-			c.DateOccurred = field
+
+			// Split dates
+			matches := dateRangeExpr.FindStringSubmatch(field)
+
+			// Check correct number of dates
+			if len(matches) != 3 {
+				return crimes, fmt.Errorf("error parsing date "+
+					"occurred, incorrect number of dates, "+
+					"field: %s, expected 2, got: %d",
+					field, len(matches)-1)
+			}
+
+			// Parse dates
+			start, err := parseDate(matches[1])
+			if err != nil {
+				return crimes, fmt.Errorf("error parsing occurred"+
+					" start date, field: %s, err: %s",
+					field, err.Error())
+			}
+
+			end, err := parseDate(matches[2])
+			if err != nil {
+				return crimes, fmt.Errorf("error parsing occurred"+
+					" end date, field: %s, err: %s",
+					field, err.Error())
+			}
+
+			// Save
+			c.DateOccurredStart = *start
+			c.DateOccurredEnd = *end
+
 			consumeDOccurred = false
 		} else if consumeDesc { // Check if consuming synopsis
 			// Check if end of consuming synopsis
@@ -160,4 +233,50 @@ func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
 
 	return crimes, nil
 
+}
+
+// parseDate Creates a time struct from a drexel date on a report. The offset
+// var specifies the offset to add to match indexes. An error is returned if one
+// occurs, nil otherwise.
+func parseDate(field string) (*time.Time, error) {
+	matches := dateExpr.FindStringSubmatch(field)
+
+	year, err := strconv.ParseInt(matches[3], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing date year: %s",
+			err.Error())
+	}
+
+	month, err := strconv.ParseInt(matches[1], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing date month: %s",
+			err.Error())
+	}
+
+	day, err := strconv.ParseInt(matches[2], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing date day: %s",
+			err.Error())
+	}
+
+	hour, err := strconv.ParseInt(matches[4], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing date hour: %s",
+			err.Error())
+	}
+
+	minute, err := strconv.ParseInt(matches[5], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing date minute: %s",
+			err.Error())
+	}
+
+	d := time.Date(int(year),
+		time.Month(month),
+		int(day),
+		int(hour),
+		int(minute),
+		0, 0, time.UTC)
+
+	return &d, nil
 }
