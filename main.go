@@ -13,14 +13,16 @@ func main() {
 	// Parse crimes
 	r := parsers.NewReport(file)
 
-	crimes, err := r.Parse()
+	_, err := r.Parse()
 	if err != nil {
 		fmt.Printf("error parsing report: %s", err.Error())
 		os.Exit(1)
 	}
 
 	// Print crimes
-	for i, crime := range crimes {
-		fmt.Printf("\n%d\n====\n%s\n", i+1, crime)
-	}
+	/*
+		for i, crime := range crimes {
+			fmt.Printf("\n%d\n====\n%s\n", i+1, crime)
+		}
+	*/
 }

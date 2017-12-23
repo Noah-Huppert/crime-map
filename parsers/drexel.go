@@ -2,37 +2,58 @@ package parsers
 
 import (
 	"fmt"
-	"strconv"
+	"regexp"
 	"strings"
 
 	"github.com/Noah-Huppert/crime-map/crime"
 )
 
-// startOfCrimeToken holds the pdf text field value which appears at the start
-// of a crime's fields in a report
-const startOfCrimeToken string = "Location :"
+// Header constants
+// headerDateRangeExpr is the regexp used to match a report header's first line
+var headerDateRangeExpr *regexp.Regexp = regexp.MustCompile("^From [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4} to [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}\\.$")
 
-// firstHeaderSubToken holds the pdf text field value which appears first in a
-// page header
-const firstHeaderSubToken string = "From"
+// headerUnivName is the name of university which appears in the report which
+// appears in the header
+const headerUnivName string = "Drexel University"
+
+// headerReportName is the name of the report which appears in the header
+const headerReportName string = "Public Safety"
 
 // lastHeaderToken holds the pdf text field value which appears last in a page
 // header
-const lastHeaderToken string = "Student Right To Know Case Log Daily Report"
+const headerTitle string = "Student Right To Know Case Log Daily Report"
 
-// ignoredFields holds all the pdf text field values that can safely be skipped
-// while parsing a pdf crime log
-var ignoredFields []string = []string{
-	startOfCrimeToken,
-	" Report #:",
-	"Date and Time Occurred From - Occurred To:",
-	"Print Date and Time",
-	"Incident\\s\\",
-	"Date Reported:",
-	"Disposition:",
-	"Synopsis:",
-	"at",
-}
+// Footer constants
+// footerPageNumExpr holds the regexp used to match page numbers at the bottom
+// of the header
+var footerPageNumExpr *regexp.Regexp = regexp.MustCompile("^[0-9]+[^/]$")
+
+// footerPageNumLabel holds the text which appears at the bottom of a footer
+const footerPageNumLabel string = "Page No."
+
+// footerTimeExpr is the regexp used to match the time in the footer of a
+// report
+var footerTimeExpr *regexp.Regexp = regexp.MustCompile("^[0-9]{2}:[0-9]{2}:[0-9]{2}$")
+
+// footerDateExpr is the regexp used to match the date in the footer of a report
+var footerDateExpr *regexp.Regexp = regexp.MustCompile("^([0-9]{2}/){2}[0-9]{4}$")
+
+// footerPrintLabel is the date and time label which appears in the footer of a
+// report
+const footerPrintLabel string = "Print Date and Time"
+
+// footerPrintLabel2 is the second part of the time and date label which
+// appears in the footer of a report
+const footerPrintLabel2 string = "at"
+
+// Field labels
+const fieldLabelReported string = "Date Reported:"
+const fieldLabelID string = " Report #:"
+const fieldLabelLoc string = "Location :"
+const fieldLabelIncidents string = "Incident(s):"
+const fieldLabelOccurred string = "Date and Time Occurred From - Occurred To:"
+const fieldLabelDesc string = "Synopsis:"
+const fieldLabelFix string = "Disposition:"
 
 // DrexelParser implements the Parser interface for Drexel University Clery
 // crime logs
@@ -46,138 +67,111 @@ func NewDrexelParser() *DrexelParser {
 // Parse interprets a pdf's text fields into Crime structs. For the style of
 // report Drexel University releases.
 func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
-	// Loop through crime fields and transform into Crime structs
-	crimeFields := p.GroupFieldsByCrime(fields)
 	crimes := []crime.Crime{}
 
-	for _, fields := range crimeFields {
-		// Check at least 5 fields provided
-		numFields := len(fields)
-		if numFields < 5 {
-			return crimes, fmt.Errorf("error parsing crime: not enough "+
-				"fields, found %d, needs 5, %s", len(fields),
-				fields)
+	// globber holds fields that are currently being parsed, for context
+	globber := []string{}
+	// footerGlobber holds fields that might potentially be part of a page
+	// footer. Fields only get added if len(footerGlobber) > 0 or a field
+	// matches footerPageNumExpr
+	footerGlobber := []string{}
+
+	globLength := 0
+	footerGlobLength := 0
+
+	// Loop through fields
+	for _, field := range fields {
+		// Add to globber
+		globber = append(globber, field)
+
+		// Check if footerGlobber is getting too big
+		if footerGlobLength > 6 {
+			footerGlobber = []string{}
+		}
+		// TODO fix footer being in middle of other fields issue
+
+		// Check if field is a number
+		if footerPageNumExpr.MatchString(field) {
+			// Reset and add to footer globber
+			footerGlobber = []string{field}
+		} else if footerGlobLength > 0 { // Check if footer globber is filling
+			footerGlobber = append(footerGlobber, field)
 		}
 
-		// Set fields
-		crime := crime.Crime{}
+		footerGlobLength = len(footerGlobber)
+		globLength = len(globber)
 
-		// TODO: Parse into more meaningful data types
-		crime.DateReported = fields[0]
-		crime.Location = fields[1]
-		crime.ReportID = fields[2]
-		crime.Incidents = []string{fields[3]}
-		crime.DateOccurred = fields[4]
+		// Check if globber contains a header
+		fmt.Printf("%d || %d | ", globLength, footerGlobLength)
+		if globLength == 4 &&
+			headerDateRangeExpr.MatchString(globber[0]) &&
+			globber[1] == headerUnivName &&
+			globber[2] == headerReportName &&
+			globber[3] == headerTitle {
+			// If header, just reset globber
+			fmt.Println("===== ^HEADER^ =====\n")
+			globber = []string{}
+		} else if footerGlobLength == 6 && // Check if globber contains footer
+			footerGlobber[1] == footerPageNumLabel &&
+			footerTimeExpr.MatchString(footerGlobber[2]) &&
+			footerDateExpr.MatchString(footerGlobber[3]) &&
+			footerGlobber[4] == footerPrintLabel &&
+			footerGlobber[5] == footerPrintLabel2 {
+			// If footer, just reset globber
+			fmt.Println("===== ^FOOTER^ =====\n")
+			footerGlobber = []string{}
+			globber = globber[:globLength-6]
+		} else if globLength == 7 && // Check if globber contains first part of crime data
+			globber[0] == fieldLabelReported &&
+			globber[1] == fieldLabelID &&
+			globber[2] == fieldLabelLoc {
+			// First first glob of a crime's info
+			// reported, location, report #, incidents
+			dateReported := globber[3]
+			location := globber[4]
+			reportID := globber[5]
+			incidents := globber[6]
 
-		// If description provided
-		if numFields > 5 {
-			crime.Descriptions = fields[4 : numFields-2]
+			fmt.Println("===== ^GLOB1^ =====")
+			fmt.Printf("    Date reported: %s\n"+
+				"    Location: %s\n"+
+				"    Report ID: %s\n"+
+				"    Incidents: %s\n\n",
+				dateReported,
+				location,
+				reportID,
+				incidents)
+			globber = []string{}
+		} else if globLength >= 4 && // Check if globber contains second part of crime data
+			globber[0] == fieldLabelIncidents &&
+			globber[2] == fieldLabelOccurred &&
+			globber[3] == fieldLabelDesc &&
+			globber[globLength-2] == fieldLabelFix {
+			// Second glob of crime's info
+
+			dateOccurred := globber[1]
+			synopsis := []string{}
+
+			// See if any synopsis provided
+			if globLength > 6 {
+				synopsis = globber[4:6]
+			}
+
+			disposition := globber[globLength-1]
+
+			fmt.Println("===== ^GLOB2^ =====")
+			fmt.Printf("    Date Occurred: %s\n"+
+				"    Synopsis: %s\n"+
+				"    Disposition: %s\n\n",
+				dateOccurred,
+				strings.Join(synopsis, ","),
+				disposition)
+			globber = []string{}
+		} else {
+			fmt.Println(field)
 		}
-
-		crime.Remediation = fields[numFields-1]
-
-		crimes = append(crimes, crime)
 	}
 
 	return crimes, nil
 
-}
-
-// IsIgnoredField returns a boolean indicating whether or not the provided
-// field should be ignored
-func (p DrexelParser) IsIgnoredField(field string) bool {
-	// Loop through all ignored fields
-	for _, val := range ignoredFields {
-		// If match
-		if field == val {
-			return true
-		}
-	}
-
-	// No match
-	return false
-}
-
-// GroupFieldsByCrime separates fields into common arrays based on the crime
-// they belong to. And returns a list, of list of fields.
-func (p DrexelParser) GroupFieldsByCrime(fields []string) [][]string {
-	// grouped holds fields, grouped by which crime they belong to, and
-	// will be returned at the end of the fn
-	grouped := [][]string{}
-
-	// inHeader indicates if the program is currently parsing fields
-	// which are in the pdf reports header
-	inHeader := false
-
-	// crimeFields holds the fields of the crime which is currently being
-	// grouped. The contents of which will be added to the grouped var
-	// every time a new crime starts
-	crimeFields := []string{}
-
-	crimesI := 0
-
-	// Loop through fields
-	for _, field := range fields {
-		// Start of a new crime
-		if field == startOfCrimeToken {
-			// Add to grouped var if not empty
-			if len(crimeFields) > 0 {
-				grouped = append(grouped, crimeFields)
-			}
-
-			// Reset crimeFields
-			crimeFields = []string{}
-
-			crimesI++
-		} else {
-			// If midway through parsing a crime's fields OR in
-			// between crimes
-
-			// Check if page number
-			// By trying to parse the current field into an int
-			if _, err := strconv.Atoi(field); err == nil {
-				inHeader = true
-				continue
-			}
-
-			// Check if field is last item in a page header
-			if field == lastHeaderToken {
-				// Mark out of header
-				inHeader = false
-				continue
-			}
-
-			// Check if field is date range report covers, first
-			// item in header
-			// In form "From xxx to xxx", so just check first word
-			split := strings.Split(field, " ")
-			if len(split) > 0 && split[0] == firstHeaderSubToken {
-				inHeader = true
-				continue
-			} else if inHeader {
-				continue
-			}
-
-			// Check if ignored
-			if p.IsIgnoredField(field) {
-				continue
-			}
-
-			// If total count of crimes at bottom of report
-			if field == fmt.Sprintf(" %d", crimesI+1) {
-				continue
-			}
-
-			// If normal text field, Add to crime fields var
-			crimeFields = append(crimeFields, field)
-		}
-	}
-
-	// Add last crime fields result if not empty
-	if len(crimeFields) > 0 {
-		grouped = append(grouped, crimeFields)
-	}
-
-	// All done
-	return grouped
 }
