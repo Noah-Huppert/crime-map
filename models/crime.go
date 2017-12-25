@@ -1,7 +1,8 @@
-package crime
+package models
 
 import (
 	"fmt"
+	"github.com/lib/pq"
 	"strings"
 	"time"
 )
@@ -9,6 +10,8 @@ import (
 // Crime structs hold information about criminal activity reported by Clery
 // act reports
 type Crime struct {
+	Model
+
 	// DateReported records when the criminal activity was disclosed to the
 	// police
 	DateReported time.Time
@@ -34,11 +37,11 @@ type Crime struct {
 
 	// Incidents holds the official classifications of the criminal
 	// activity which took place
-	Incidents []string
+	Incidents pq.StringArray `gorm:"type:text[]"`
 
 	// Descriptions holds any details about the specific incidents which
 	// took place
-	Descriptions []string
+	Descriptions pq.StringArray `gorm:"type:text[]"`
 
 	// Remediation is the action taken by the institution who reported the
 	// crime to deal with the criminal activity

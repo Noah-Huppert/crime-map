@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Noah-Huppert/crime-map/crime"
+	"github.com/Noah-Huppert/crime-map/models"
 )
 
 // headerDateRangeExpr is the regexp used to match a report header's first line
@@ -41,12 +41,12 @@ func NewDrexelParser() *DrexelParser {
 
 // Parse interprets a pdf's text fields into Crime structs. For the style of
 // report Drexel University releases.
-func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
+func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 	// crimes holds all parsed Crimes
-	crimes := []crime.Crime{}
+	crimes := []models.Crime{}
 
 	// c holds the Crime struct currently being parsed
-	var c crime.Crime
+	var c models.Crime
 
 	// skip indicates how many fields the parser should skip
 	var skip int
@@ -192,7 +192,7 @@ func (p DrexelParser) Parse(fields []string) ([]crime.Crime, error) {
 
 			// And add crime to list
 			crimes = append(crimes, c)
-			c = crime.Crime{}
+			c = models.Crime{}
 		} else if field == fieldLabelReported { // Check if beginning
 			// of glob 1
 			skip = 2

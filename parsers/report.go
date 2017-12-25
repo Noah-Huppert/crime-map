@@ -3,7 +3,7 @@ package parsers
 import (
 	"errors"
 	"fmt"
-	"github.com/Noah-Huppert/crime-map/crime"
+	"github.com/Noah-Huppert/crime-map/models"
 	"github.com/Noah-Huppert/crime-map/pdf"
 	"time"
 )
@@ -30,7 +30,7 @@ type Report struct {
 	parsed bool
 
 	// crimes holds all the crimes found in the clery report
-	crimes []crime.Crime
+	crimes []models.Crime
 }
 
 // NewReport creates a new report struct with the given file path. Additionally
@@ -39,7 +39,7 @@ func NewReport(path string) *Report {
 	return &Report{
 		pdf:    pdf.NewPdf(path),
 		parsed: false,
-		crimes: []crime.Crime{},
+		crimes: []models.Crime{},
 	}
 }
 
@@ -50,13 +50,13 @@ func (r Report) IsParsed() bool {
 
 // Crimes returns the crimes recorded in the specified Clery report. Along with
 // a boolean indicating if the report has been parsed yet
-func (r Report) Crimes() ([]crime.Crime, bool) {
+func (r Report) Crimes() ([]models.Crime, bool) {
 	return r.crimes, r.IsParsed()
 }
 
 // Parse interprets a crime report file and returns the contained crimes.
 // Additionally an error will be returned, nil on success.
-func (r Report) Parse() ([]crime.Crime, error) {
+func (r Report) Parse() ([]models.Crime, error) {
 	// Check if parsed
 	if r.IsParsed() {
 		return r.crimes, errors.New("report has already been parsed")
