@@ -1,47 +1,72 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 
-	"github.com/Noah-Huppert/crime-map/db"
+	"github.com/Noah-Huppert/crime-map/config"
+	"github.com/Noah-Huppert/crime-map/dstore"
 	"github.com/Noah-Huppert/crime-map/models"
 	"github.com/Noah-Huppert/crime-map/parsers"
+
+	"github.com/gorilla/mux"
 )
 
 const file = "data/2017-10-12.pdf"
 
 func main() {
-	// Migrate db
-	err := models.Migrate()
+	// Get config
+	fmt.Println("loading configuration")
+	c, err := config.NewConfig()
 	if err != nil {
-		fmt.Printf("error migrating db: %s", err.Error())
+		fmt.Printf("error loading configuration: %s\n", err.Error())
 		os.Exit(1)
 	}
 
-	// Connect to db
-	db, err := db.NewDB()
+	// Migrate db
+	fmt.Println("migrating db")
+	err = models.Migrate()
 	if err != nil {
-		fmt.Printf("error creating db instance: %s", err.Error())
+		fmt.Printf("error migrating db: %s\n", err.Error())
 		os.Exit(1)
 	}
 
 	// Parse crimes
+	fmt.Println("parsing report")
 	r := parsers.NewReport(file)
 
 	crimes, err := r.Parse()
 	if err != nil {
-		fmt.Printf("error parsing report: %s", err.Error())
+		fmt.Printf("error parsing report: %s\n", err.Error())
 		os.Exit(1)
 	}
 
 	// Print crimes
-	for i, crime := range crimes {
-		fmt.Printf("\n%d\n====\n%s\n", i+1, crime)
-
-		if err = db.Save(&crime).Error; err != nil {
+	for _, crime := range crimes {
+		if _, err = dstore.SaveIfNot(&crime, &crime); err != nil {
 			fmt.Printf("error saving crime: %s\n", err.Error())
 			os.Exit(1)
 		}
+	}
+
+	// Start http server
+	router := mux.NewRouter()
+
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))
+	router.HandleFunc("/api/v1/crimes", func(w http.ResponseWriter, r *http.Request) {
+		bytes, err := json.Marshal(crimes)
+		if err != nil {
+			fmt.Fprintf(w, "error marshalling crimes: %s", err.Error())
+		}
+
+		fmt.Fprintf(w, string(bytes))
+	})
+
+	fmt.Printf("listening on :%d\n", c.HTTP.Port)
+	err = http.ListenAndServe(fmt.Sprintf(":%d", c.HTTP.Port), router)
+	if err != nil {
+		fmt.Printf("error starting http server: %s\n", err.Error())
 	}
 }

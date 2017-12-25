@@ -1,4 +1,4 @@
-package db
+package dstore
 
 import (
 	"fmt"
@@ -7,9 +7,17 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
+// instance holds the database instance if already created
+var instance *gorm.DB
+
 // NewDB creates a new connected DB instance and returns it. Along with an
 // error if one occurs. Or nil on success.
 func NewDB() (*gorm.DB, error) {
+	// Check if exists
+	if instance != nil {
+		return instance, nil
+	}
+
 	// Get db config
 	c, err := config.NewConfig()
 	if err != nil {
@@ -27,5 +35,7 @@ func NewDB() (*gorm.DB, error) {
 		return nil, fmt.Errorf("error connecting to db: %s", err.Error())
 	}
 
-	return db, nil
+	instance = db
+
+	return instance, nil
 }

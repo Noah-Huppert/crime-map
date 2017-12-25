@@ -4,7 +4,7 @@
 APP_ENV=develop
 
 # Src vars
-SRC=main.go pdf/*.go config/*.go db/*.go parsers/*.go
+SRC=main.go models/*.go pdf/*.go config/*.go dstore/*.go parsers/*.go
 MAIN_SRC=main.go
 
 # Db vars
