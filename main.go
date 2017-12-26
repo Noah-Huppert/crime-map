@@ -45,7 +45,7 @@ func main() {
 
 	// Print crimes
 	for _, crime := range crimes {
-		if _, err = dstore.SaveIfNot(&crime, &crime); err != nil {
+		if err = crime.SaveIfUnique(&crime, &crime); err != nil {
 			fmt.Printf("error saving crime: %s\n", err.Error())
 			os.Exit(1)
 		}
