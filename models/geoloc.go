@@ -114,7 +114,7 @@ type GeoLoc struct {
 // NewGeoLoc returns a new GeoLoc instance with the provided raw text
 func NewGeoLoc(raw string) *GeoLoc {
 	return &GeoLoc{
-		Parsed: false,
-		Raw:    raw,
+		Located: false,
+		Raw:     raw,
 	}
 }
