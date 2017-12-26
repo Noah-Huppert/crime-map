@@ -35,6 +35,10 @@ type Crime struct {
 	// Location is the place where the criminal activity occurred
 	Location string
 
+	// GeoLocID is the unique ID of the Geo entry which holds the geographically
+	// encoded location in lat long form
+	GeoLocID uint `gorm:"ForeignKey:GeoLocID"`
+
 	// Incidents holds the official classifications of the criminal
 	// activity which took place
 	Incidents pq.StringArray `gorm:"type:text[]"`
@@ -54,6 +58,7 @@ func (c Crime) String() string {
 		"Occurred End: %s\n"+
 		"ID: %d-%d\n"+
 		"Location: %s\n"+
+		"GeoLocID: %d\n"+
 		"Incidents: %s\n"+
 		"Description: %s\n"+
 		"Remediation: %s",
@@ -63,6 +68,7 @@ func (c Crime) String() string {
 		c.ReportSuperID,
 		c.ReportID,
 		c.Location,
+		c.GeoLocID,
 		strings.Join(c.Incidents, ","),
 		strings.Join(c.Descriptions, ","),
 		c.Remediation)

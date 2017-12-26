@@ -15,7 +15,7 @@ func Migrate() error {
 	}
 
 	// Migrate
-	err = db.AutoMigrate(&Crime{}).Error
+	err = db.AutoMigrate(&Crime{}, &GeoLoc{}).Error
 	if err != nil {
 		return fmt.Errorf("error migrating db: %s", err.Error())
 	}
