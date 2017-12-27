@@ -1,6 +1,7 @@
 package models
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/Noah-Huppert/crime-map/dstore"
 	"github.com/lib/pq"
@@ -13,6 +14,8 @@ import (
 type Crime struct {
 	// ID is a unique identifier
 	ID uint
+
+	// TODO: Add "University" field
 
 	// DateReported records when the criminal activity was disclosed to the
 	// police
@@ -30,10 +33,9 @@ type Crime struct {
 	// with the reported crime.
 	ReportSuperID uint
 
-	// ReportID is the second portion of the police report ID associated
+	// ReportSubID is the second portion of the police report ID associated
 	// with the reported crime
-	// TODO: Rename to report sub id
-	ReportID uint
+	ReportSubID uint
 
 	// Location is the place where the criminal activity occurred
 	Location string
@@ -69,7 +71,7 @@ func (c Crime) String() string {
 		c.DateOccurredStart,
 		c.DateOccurredEnd,
 		c.ReportSuperID,
-		c.ReportID,
+		c.ReportSubID,
 		c.Location,
 		c.GeoLocID,
 		strings.Join(c.Incidents, ","),
@@ -78,22 +80,24 @@ func (c Crime) String() string {
 }
 
 // Query finds a model with matching attributes in the db and returns the db
-// rows object. Additionally an error is returned if one occurs, or nil on
-// success.
-func (c Crime) Query() (*db.Rows, error) {
+// rows object. Which must be closed. Additionally an error is returned if one
+// occurs, or nil on success.
+func (c Crime) Query() (*sql.Rows, error) {
 	// Get db
 	db, err := dstore.NewDB()
 	if err != nil {
-		return fmt.Errorf("error getting db instance: %s", err.Error())
+		return nil, fmt.Errorf("error getting db instance: %s", err.Error())
 	}
 
 	// Query
-	rows, err := db.Query("SELECT id FROM crimes WHERE date_reported=$1 " +
-		"AND date_occurred=[$2, $3] AND " +
-		"report_super_id=$4 AND report_sub_id=$5 AND " +
-		"location=$6 AND geo_loc_id=$7 AND " +
-		"incidents=$8 AND descriptions=$9 AND " +
-		"remediation=$10")
+	rows, err := db.Query("SELECT id FROM crimes WHERE date_reported=$1 "+
+		"AND date_occurred=[$2, $3] AND "+
+		"report_super_id=$4 AND report_sub_id=$5 AND "+
+		"location=$6 AND geo_loc_id=$7 AND "+
+		"incidents=$8 AND descriptions=$9 AND "+
+		"remediation=$10", c.DateReported, c.DateOccurredStart,
+		c.DateOccurredEnd, c.ReportSuperID, c.ReportSubID, c.Location,
+		c.GeoLocID, c.Incidents, c.Descriptions, c.Remediation)
 
 	if err != nil {
 		return nil, fmt.Errorf("error querying database: %s",
@@ -103,29 +107,83 @@ func (c Crime) Query() (*db.Rows, error) {
 	return rows, nil
 }
 
-// Insert adds the model to the database
-func (c Crime) Insert() (*db.Result, error) {
+// Insert adds the model to the database. Returns a result which holds the
+// number of rows affected and the last insert ID. This result must be closed.
+// Additionally an error is returned, nil on success.
+func (c Crime) Insert() (*sql.Result, error) {
 	// Get db instance
 	db, err := dstore.NewDB()
 	if err != nil {
-		return nil, fmt.Errorf("error creating db instance: %s", 
+		return nil, fmt.Errorf("error creating db instance: %s",
 			err.Error())
 	}
 
 	// Insert
-	res, err := db.Exec("INSERT INTO crimes (id, date_reported, date_occurred)
-	// TODO: Finish insert
+	res, err := db.Exec("INSERT INTO crimes (id, date_reported, "+
+		"date_occurred, report_super_id, report_sub_id, location "+
+		"geo_loc_id, incidents, descriptions, remediation) VALUES "+
+		"($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", c.ID,
+		c.DateReported, c.DateOccurredStart, c.DateOccurredEnd,
+		c.ReportSuperID, c.ReportSubID, c.Location, c.GeoLocID,
+		c.Incidents, c.Descriptions, c.Remediation)
+
+	if err != nil {
+		return fmt.Errorf("error inserting into db: %s")
+	}
+
+	return res, nil
 }
 
-// SaveIfUnique saves the current Crime model if it does not exist in the db.
+// SaveIfNew saves the current Crime model if it does not exist in the db.
 // Returns an error if one occurs, or nil on success.
-func (c Crime) SaveIfUnique() error {
+func (c Crime) SaveIfNew() error {
 	// Query
 	rows, err := c.Query()
 
 	// Check if exists
-	if len(rows) == 0 {
-		// If doesn't, insert
-		res, err 
+	if !rows.Next() {
+		// If doesn't exist, close query
+		if err = rows.Close(); err != nil {
+			return fmt.Errorf("error closing query when model "+
+				"doesn't exist: %s", err.Error())
+		}
+
+		// Insert
+		res, err := c.Insert()
+
+		if res.Err() != nil {
+			return fmt.Errorf("error inserting non existing model: %s",
+				err.Error())
+		}
+
+		// Get new id
+		id, err := res.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("error retrieving model id from "+
+				"insert result: %s",
+				err.Error())
+		}
+		c.ID = id
+
+		// Success, close result
+		if err = res.Close(); err != nil {
+			return fmt.Errorf("error closing insert result: %s",
+				err.Error())
+		}
 	}
+
+	// Already exists, get id
+	if err = c.Scan(&c.ID); err != nil {
+		return fmt.Errorf("error retrieving model id from query: %s",
+			err.Error())
+	}
+
+	// Close query
+	if err = rows.Close(); err != nil {
+		return fmt.Errorf("error closing query when model exists: %s",
+			err.Error())
+	}
+
+	// Success
+	return nil
 }

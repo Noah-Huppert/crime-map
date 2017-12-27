@@ -130,7 +130,7 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 						"report Id into uint: %s",
 						err.Error())
 				}
-				c.ReportID = uint(id)
+				c.ReportSubID = uint(id)
 
 				consume--
 			} else if consume == 1 { // If consuming incidents field
