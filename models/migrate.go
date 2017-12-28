@@ -33,7 +33,7 @@ func Migrate() error {
 	}
 
 	// Run
-	if err = migrator.Up(); err != nil {
+	if err = migrator.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("error running migrations: %s", err.Error())
 	}
 

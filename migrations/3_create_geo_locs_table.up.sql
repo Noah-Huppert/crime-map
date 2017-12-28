@@ -3,12 +3,19 @@ CREATE TABLE geo_locs (
 
 	located BOOLEAN NOT NULL,
 
-	lat FLOAT(32) NOT NULL,
-	long FLOAT(32) NOT NULL,
+	lat FLOAT(32),
+	long FLOAT(32),
 
-	postal_addr TEXT NOT NULL,
+	postal_addr TEXT,
 
-	accuracy GEO_ACCURACY_T NOT NULL,
+	accuracy GEO_ACCURACY_T,
 
+	partial BOOLEAN,
+	bounds_provided BOOLEAN,
 
+	bounds_id INTEGER REFERENCES geo_bounds,
+
+	gapi_place_id TEXT,
+
+	raw TEXT NOT NULL
 )

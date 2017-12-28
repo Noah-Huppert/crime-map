@@ -3,7 +3,7 @@ package models
 // GeoBound indicates a square area on a map
 type GeoBound struct {
 	// ID is the unique identifier
-	ID uint
+	ID int
 
 	// NeLat holds the recommended latitude which the northeast corner
 	// of the map viewport should be located at

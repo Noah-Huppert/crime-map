@@ -46,7 +46,7 @@ const (
 // information, as not all locations can be resolved exactly.
 type GeoLoc struct {
 	// ID is the unique identifier
-	ID uint
+	ID int
 
 	// Located indicates if the raw location has been geocoded using the
 	// GAPI

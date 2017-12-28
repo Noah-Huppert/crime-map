@@ -13,7 +13,7 @@ import (
 // act reports
 type Crime struct {
 	// ID is a unique identifier
-	ID uint
+	ID int
 
 	// TODO: Add "University" field
 
@@ -91,7 +91,7 @@ func (c Crime) Query() (*sql.Rows, error) {
 
 	// Query
 	rows, err := db.Query("SELECT id FROM crimes WHERE date_reported=$1 "+
-		"AND date_occurred=[$2, $3] AND "+
+		"AND date_occurred=tstzrange($2, $3, '()') AND "+
 		"report_super_id=$4 AND report_sub_id=$5 AND "+
 		"location=$6 AND geo_loc_id=$7 AND "+
 		"incidents=$8 AND descriptions=$9 AND "+
@@ -110,7 +110,7 @@ func (c Crime) Query() (*sql.Rows, error) {
 // Insert adds the model to the database. Returns a result which holds the
 // number of rows affected and the last insert ID. This result must be closed.
 // Additionally an error is returned, nil on success.
-func (c Crime) Insert() (*sql.Result, error) {
+func (c Crime) Insert() (sql.Result, error) {
 	// Get db instance
 	db, err := dstore.NewDB()
 	if err != nil {
@@ -122,13 +122,13 @@ func (c Crime) Insert() (*sql.Result, error) {
 	res, err := db.Exec("INSERT INTO crimes (id, date_reported, "+
 		"date_occurred, report_super_id, report_sub_id, location "+
 		"geo_loc_id, incidents, descriptions, remediation) VALUES "+
-		"($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", c.ID,
+		"($1, $2, generate_series($3, $4), $5, $6, $7, $8, $9, $10)", c.ID,
 		c.DateReported, c.DateOccurredStart, c.DateOccurredEnd,
 		c.ReportSuperID, c.ReportSubID, c.Location, c.GeoLocID,
 		c.Incidents, c.Descriptions, c.Remediation)
 
 	if err != nil {
-		return fmt.Errorf("error inserting into db: %s")
+		return nil, fmt.Errorf("error inserting into db: %s")
 	}
 
 	return res, nil
@@ -139,6 +139,10 @@ func (c Crime) Insert() (*sql.Result, error) {
 func (c Crime) SaveIfNew() error {
 	// Query
 	rows, err := c.Query()
+	if err != nil {
+		return fmt.Errorf("error determining if crime is new: %s",
+			err.Error())
+	}
 
 	// Check if exists
 	if !rows.Next() {
@@ -150,8 +154,7 @@ func (c Crime) SaveIfNew() error {
 
 		// Insert
 		res, err := c.Insert()
-
-		if res.Err() != nil {
+		if err != nil {
 			return fmt.Errorf("error inserting non existing model: %s",
 				err.Error())
 		}
@@ -163,17 +166,11 @@ func (c Crime) SaveIfNew() error {
 				"insert result: %s",
 				err.Error())
 		}
-		c.ID = id
-
-		// Success, close result
-		if err = res.Close(); err != nil {
-			return fmt.Errorf("error closing insert result: %s",
-				err.Error())
-		}
+		c.ID = int(id)
 	}
 
 	// Already exists, get id
-	if err = c.Scan(&c.ID); err != nil {
+	if err = rows.Scan(&c.ID); err != nil {
 		return fmt.Errorf("error retrieving model id from query: %s",
 			err.Error())
 	}
