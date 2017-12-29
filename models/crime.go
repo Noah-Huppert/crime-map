@@ -88,44 +88,51 @@ func (c Crime) String() string {
 // Query finds a model with matching attributes in the db and returns the db
 // rows object. Which must be closed. Additionally an error is returned if one
 // occurs, or nil on success.
-func (c Crime) Query() (*sql.Rows, error) {
+func (c Crime) Query() error {
 	// Get db
 	db, err := dstore.NewDB()
 	if err != nil {
-		return nil, fmt.Errorf("error getting db instance: %s", err.Error())
+		return fmt.Errorf("error getting db instance: %s", err.Error())
 	}
 
 	// Query
-	rows, err := db.Query("SELECT id FROM crimes WHERE date_reported=$1 "+
+	row := db.QueryRow("SELECT id FROM crimes WHERE date_reported=$1 "+
 		"AND date_occurred=tstzrange($2, $3, '()') AND "+
 		"report_super_id=$4 AND report_sub_id=$5 AND "+
-		"location=$6 AND geo_loc_id=$7 AND "+
-		"incidents=$8 AND descriptions=$9 AND "+
-		"remediation=$10", c.DateReported, c.DateOccurredStart,
+		"location=$6 AND "+
+		"incidents=$7 AND descriptions=$8 AND "+
+		"remediation=$9", c.DateReported, c.DateOccurredStart,
 		c.DateOccurredEnd, c.ReportSuperID, c.ReportSubID, c.Location,
-		c.GeoLocID, c.Incidents, c.Descriptions, c.Remediation)
+		c.Incidents, c.Descriptions, c.Remediation)
 
-	if err != nil {
-		return nil, fmt.Errorf("error querying database: %s",
+	// Get ID
+	err = row.Scan(&c.ID)
+
+	// Check if no row found
+	if err == sql.ErrNoRows {
+		// Just return sql error so we can ID
+		return err
+	} else if err != nil {
+		return fmt.Errorf("error querying for crime model: %s",
 			err.Error())
 	}
 
-	return rows, nil
+	return nil
 }
 
 // Insert adds the model to the database. Returns a db rows object for the
 // insert containing the new model id. This rows object must be closed.
 // Additionally an error is returned, nil on success.
-func (c Crime) Insert() (*sql.Rows, error) {
+func (c Crime) Insert() error {
 	// Get db instance
 	db, err := dstore.NewDB()
 	if err != nil {
-		return nil, fmt.Errorf("error creating db instance: %s",
+		return fmt.Errorf("error creating db instance: %s",
 			err.Error())
 	}
 
 	// Insert
-	rows, err := db.Query("INSERT INTO crimes (date_reported, "+
+	row := db.QueryRow("INSERT INTO crimes (date_reported, "+
 		"date_occurred, report_super_id, report_sub_id, location, "+
 		"geo_loc_id, incidents, descriptions, remediation) VALUES "+
 		"($1, tstzrange($2, $3, '()'), $4, $5, $6, NULL, $7, $8, "+
@@ -134,68 +141,34 @@ func (c Crime) Insert() (*sql.Rows, error) {
 		c.ReportSuperID, c.ReportSubID, c.Location,
 		c.Incidents, c.Descriptions, c.Remediation)
 
+	// Get ID
+	err = row.Scan(&c.ID)
 	if err != nil {
-		return nil, fmt.Errorf("error inserting into db: %s",
+		return fmt.Errorf("error inserting into db: %s",
 			err.Error())
 	}
 
-	return rows, nil
+	return nil
 }
 
 // SaveIfNew saves the current Crime model if it does not exist in the db.
 // Returns an error if one occurs, or nil on success.
 func (c Crime) SaveIfNew() error {
 	// Query
-	rows, err := c.Query()
-	if err != nil {
+	err := c.Query()
+	if (err != nil) && (err != sql.ErrNoRows) {
 		return fmt.Errorf("error determining if crime is new: %s",
 			err.Error())
 	}
 
-	// Check if exists
-	if !rows.Next() {
-		// If doesn't exist, close query
-		if err = rows.Close(); err != nil {
-			return fmt.Errorf("error closing query when model "+
-				"doesn't exist: %s", err.Error())
-		}
-
+	// Check if doesn't exist
+	if err == sql.ErrNoRows {
 		// Insert
-		res, err := c.Insert()
+		err := c.Insert()
 		if err != nil {
 			return fmt.Errorf("error inserting non existing model: %s",
 				err.Error())
 		}
-
-		// Get new id
-		if !res.Next() {
-			return fmt.Errorf("error retrieving crime model id, " +
-				"query didn't return any rows")
-		}
-
-		if err = res.Scan(&c.ID); err != nil {
-			return fmt.Errorf("error retrieving model id from "+
-				"insert rows: %s",
-				err.Error())
-		}
-
-		// Close
-		if err = res.Close(); err != nil {
-			return fmt.Errorf("error closing insert query: %s",
-				err.Error())
-		}
-	} else {
-		// Already exists, get id
-		if err = rows.Scan(&c.ID); err != nil {
-			return fmt.Errorf("error retrieving model id from query: %s",
-				err.Error())
-		}
-	}
-
-	// Close query
-	if err = rows.Close(); err != nil {
-		return fmt.Errorf("error closing query when model exists: %s",
-			err.Error())
 	}
 
 	// Success
