@@ -85,9 +85,9 @@ func (c Crime) String() string {
 		strings.Join(StringParseErrors(c.ParseErrors), ", "))
 }
 
-// Query finds a model with matching attributes in the db and returns the db
-// rows object. Which must be closed. Additionally an error is returned if one
-// occurs, or nil on success.
+// Query finds a model with matching attributes in the db and sets the Crime.ID
+// field if found. Additionally an error is returned. Which will be
+// sql.ErrNoRows if a matching model is not found. Or nil on success.
 func (c Crime) Query() error {
 	// Get db
 	db, err := dstore.NewDB()
@@ -120,9 +120,9 @@ func (c Crime) Query() error {
 	return nil
 }
 
-// Insert adds the model to the database. Returns a db rows object for the
-// insert containing the new model id. This rows object must be closed.
-// Additionally an error is returned, nil on success.
+// Insert adds the model to the database and sets the Crime.ID field to the
+// newly inserted models ID. Additionally an error is returned if one occurs,
+// or nil on success.
 func (c Crime) Insert() error {
 	// Get db instance
 	db, err := dstore.NewDB()

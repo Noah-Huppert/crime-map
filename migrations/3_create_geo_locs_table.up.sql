@@ -17,5 +17,5 @@ CREATE TABLE geo_locs (
 
 	gapi_place_id TEXT,
 
-	raw TEXT NOT NULL
+	raw TEXT NOT NULL UNIQUE
 )

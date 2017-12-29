@@ -1,5 +1,9 @@
 package models
 
+import (
+	"github.com/Noah-Huppert/crime-map/dstore"
+)
+
 const (
 	// StatusOk indicates that a GAPI request was successful
 	StatusOk string = "OK"
@@ -95,3 +99,76 @@ func NewGeoLoc(raw string) *GeoLoc {
 		Raw:     raw,
 	}
 }
+
+// QueryID attempts to find a GeoLoc model in the db with the same raw field
+// value. And sets the GeoLoc.ID field to the db row's ID. Additionally an error
+// is returned if one occurs. sql.ErrNoRows if no GeoLocs are found with the
+// specified raw value. Nil on success.
+func (l GeoLoc) QueryID() error {
+	// Get db instance
+	db, err := dstore.NewDB()
+	if err != nil {
+		return fmt.Errorf("error retrieving db instance: %s",
+			err.Error())
+	}
+
+	// Query
+	row := db.QueryRow("SELECT id FROM geo_locs WHERE raw = $1", l.Raw)
+
+	// Get ID
+	err = row.Scan(&l.ID)
+
+	// Check if row found
+	if err == sql.ErrNoRows {
+		// If not, return so we can identify
+		return err
+	} else if err != nil {
+		return fmt.Errorf("error reading GeoLoc ID from row: %s",
+			err.Error())
+	}
+
+	// Success
+	return nil
+}
+
+// Insert adds a GeoLoc model to the database. An error is returned if one
+// occurs, or nil on success.
+func (l GeoLoc) Insert() error {
+	// Get db instance
+	db, err := dstore.New()
+	if err != nil {
+		return fmt.Errorf("error retrieving DB instance: %s",
+			err.Error())
+	}
+
+	// Insert
+	var row *sql.Row
+
+	// Check if GeoLoc has been parsed
+	if l.Located {
+		// If so, save all fields
+		row = db.QueryRow("INSERT INTO geo_locs (located, lat, long,"+
+			" postal_addr, accuracy, partial, bounds_provided, "+
+			"bounds_id, gapi_place_id, raw) VALUES ($1, $2, $3, $4"+
+			", $5, $6, $7, $8, $9, $10) RETURNING id",
+			l.Located, l.Lat, l.Long, l.PostalAddr, l.Accuracy,
+			l.Partial, l.BoundsProvided, l.BoundsID, l.GAPIPlaceID,
+			l.Raw)
+	} else {
+		// If not, only save a couple, and leave rest null
+		row = db.QueryRow("INSERT INTO geo_locs (located, raw) VALUES"+
+			" ($1, $2) RETURNING id",
+			l.Located, l.Raw)
+	}
+
+	// Get inserted row ID
+	err = row.Scan(&l.ID)
+	if err != nil {
+		return fmt.Errorf("error inserting row, Located: %t, err: %s",
+			l.Located, err.Error())
+	}
+
+	return nil
+}
+
+// TODO: Write GeoLoc.InsertIfNew fn
