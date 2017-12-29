@@ -55,6 +55,10 @@ type Crime struct {
 	// Remediation is the action taken by the institution who reported the
 	// crime to deal with the criminal activity
 	Remediation string
+
+	// ParseErrors holds any errors that occur while parsing the crime.
+	// These will be saved in other db tables depending on their types.
+	ParseErrors []ParseError
 }
 
 func (c Crime) String() string {
@@ -66,7 +70,8 @@ func (c Crime) String() string {
 		"GeoLocID: %d\n"+
 		"Incidents: %s\n"+
 		"Description: %s\n"+
-		"Remediation: %s",
+		"Remediation: %s\n"+
+		"Parse Errors: %s",
 		c.DateReported,
 		c.DateOccurredStart,
 		c.DateOccurredEnd,
@@ -76,7 +81,8 @@ func (c Crime) String() string {
 		c.GeoLocID,
 		strings.Join(c.Incidents, ","),
 		strings.Join(c.Descriptions, ","),
-		c.Remediation)
+		c.Remediation,
+		strings.Join(StringParseErrors(c.ParseErrors), ", "))
 }
 
 // Query finds a model with matching attributes in the db and returns the db
@@ -107,10 +113,10 @@ func (c Crime) Query() (*sql.Rows, error) {
 	return rows, nil
 }
 
-// Insert adds the model to the database. Returns a result which holds the
-// number of rows affected and the last insert ID. This result must be closed.
+// Insert adds the model to the database. Returns a db rows object for the
+// insert containing the new model id. This rows object must be closed.
 // Additionally an error is returned, nil on success.
-func (c Crime) Insert() (sql.Result, error) {
+func (c Crime) Insert() (*sql.Rows, error) {
 	// Get db instance
 	db, err := dstore.NewDB()
 	if err != nil {
@@ -119,19 +125,21 @@ func (c Crime) Insert() (sql.Result, error) {
 	}
 
 	// Insert
-	res, err := db.Exec("INSERT INTO crimes (id, date_reported, "+
-		"date_occurred, report_super_id, report_sub_id, location "+
+	rows, err := db.Query("INSERT INTO crimes (date_reported, "+
+		"date_occurred, report_super_id, report_sub_id, location, "+
 		"geo_loc_id, incidents, descriptions, remediation) VALUES "+
-		"($1, $2, generate_series($3, $4), $5, $6, $7, $8, $9, $10)", c.ID,
+		"($1, tstzrange($2, $3, '()'), $4, $5, $6, NULL, $7, $8, "+
+		"$9) RETURNING id",
 		c.DateReported, c.DateOccurredStart, c.DateOccurredEnd,
-		c.ReportSuperID, c.ReportSubID, c.Location, c.GeoLocID,
+		c.ReportSuperID, c.ReportSubID, c.Location,
 		c.Incidents, c.Descriptions, c.Remediation)
 
 	if err != nil {
-		return nil, fmt.Errorf("error inserting into db: %s")
+		return nil, fmt.Errorf("error inserting into db: %s",
+			err.Error())
 	}
 
-	return res, nil
+	return rows, nil
 }
 
 // SaveIfNew saves the current Crime model if it does not exist in the db.
@@ -160,19 +168,28 @@ func (c Crime) SaveIfNew() error {
 		}
 
 		// Get new id
-		id, err := res.LastInsertId()
-		if err != nil {
+		if !res.Next() {
+			return fmt.Errorf("error retrieving crime model id, " +
+				"query didn't return any rows")
+		}
+
+		if err = res.Scan(&c.ID); err != nil {
 			return fmt.Errorf("error retrieving model id from "+
-				"insert result: %s",
+				"insert rows: %s",
 				err.Error())
 		}
-		c.ID = int(id)
-	}
 
-	// Already exists, get id
-	if err = rows.Scan(&c.ID); err != nil {
-		return fmt.Errorf("error retrieving model id from query: %s",
-			err.Error())
+		// Close
+		if err = res.Close(); err != nil {
+			return fmt.Errorf("error closing insert query: %s",
+				err.Error())
+		}
+	} else {
+		// Already exists, get id
+		if err = rows.Scan(&c.ID); err != nil {
+			return fmt.Errorf("error retrieving model id from query: %s",
+				err.Error())
+		}
 	}
 
 	// Close query

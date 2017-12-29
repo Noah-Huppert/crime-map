@@ -43,7 +43,8 @@ func main() {
 	}
 
 	// Print crimes
-	for _, crime := range crimes {
+	for i, crime := range crimes {
+		fmt.Printf("\n%d\n====\n%s\n\n", i+1, crime)
 		if err = crime.SaveIfNew(); err != nil {
 			fmt.Printf("error saving crime: %s\n", err.Error())
 			os.Exit(1)

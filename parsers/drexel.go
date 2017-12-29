@@ -169,6 +169,37 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 					field, err.Error())
 			}
 
+			// Check start date is after end date
+			if start.After(*end) {
+				// If so, add 12 hours to end date
+				fixedEnd := end.Add(time.Hour *
+					time.Duration(12))
+
+				// Check again
+				if start.After(fixedEnd) {
+					// We don't know how to fix, error
+					return crimes, fmt.Errorf("error "+
+						"parsing occurred date, start "+
+						"date is before end date, "+
+						"after correction, field: %s",
+						field)
+				}
+
+				// Note parse error
+				pErr := models.ParseError{
+					Field:    "date_occurred",
+					Original: field,
+					Corrected: fmt.Sprintf("%s - %s",
+						start.String(),
+						fixedEnd.String()),
+					ErrType: models.TypeBadRangeEnd,
+				}
+				c.ParseErrors = append(c.ParseErrors, pErr)
+
+				// If success, replace
+				end = &fixedEnd
+			}
+
 			// Save
 			c.DateOccurredStart = *start
 			c.DateOccurredEnd = *end
