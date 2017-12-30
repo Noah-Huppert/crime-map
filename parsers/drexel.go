@@ -10,6 +10,9 @@ import (
 	"github.com/Noah-Huppert/crime-map/models"
 )
 
+// DrexelUName holds the Drexel University's name
+const DrexelUName string = "Drexel University"
+
 // headerDateRangeExpr is the regexp used to match a report header's first line
 var headerDateRangeExpr *regexp.Regexp = regexp.MustCompile("^From [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4} to [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}\\.$")
 
@@ -100,7 +103,7 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 				c.DateReported = *d
 				consume--
 			} else if consume == 3 { // If consuming location field
-				c.Location = field
+				// Try to find a
 				consume--
 			} else if consume == 2 { // If consuming report ID field
 				// Split by dash
@@ -223,7 +226,9 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 
 			// And add crime to list
 			crimes = append(crimes, c)
-			c = models.Crime{}
+			c = models.Crime{
+				University: DrexelUName,
+			}
 		} else if field == fieldLabelReported { // Check if beginning
 			// of glob 1
 			skip = 2

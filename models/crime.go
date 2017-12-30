@@ -38,9 +38,6 @@ type Crime struct {
 	// with the reported crime
 	ReportSubID uint
 
-	// Location is the place where the criminal activity occurred
-	Location string
-
 	// GeoLocID is the unique ID of the Geo entry which holds the geographically
 	// encoded location in lat long form
 	GeoLocID uint `gorm:"ForeignKey:GeoLocID"`
