@@ -15,7 +15,8 @@ type Crime struct {
 	// ID is a unique identifier
 	ID int
 
-	// TODO: Add "University" field
+	// University indicates which university the crime was reported by
+	University string
 
 	// DateReported records when the criminal activity was disclosed to the
 	// police
@@ -62,7 +63,8 @@ type Crime struct {
 }
 
 func (c Crime) String() string {
-	return fmt.Sprintf("Reported: %s\n"+
+	return fmt.Sprintf("University: %s\n"+
+		"Reported: %s\n"+
 		"Occurred Start: %s\n"+
 		"Occurred End: %s\n"+
 		"ID: %d-%d\n"+
@@ -72,6 +74,7 @@ func (c Crime) String() string {
 		"Description: %s\n"+
 		"Remediation: %s\n"+
 		"Parse Errors: %s",
+		c.University,
 		c.DateReported,
 		c.DateOccurredStart,
 		c.DateOccurredEnd,
@@ -96,14 +99,14 @@ func (c Crime) Query() error {
 	}
 
 	// Query
-	row := db.QueryRow("SELECT id FROM crimes WHERE date_reported=$1 "+
-		"AND date_occurred=tstzrange($2, $3, '()') AND "+
-		"report_super_id=$4 AND report_sub_id=$5 AND "+
-		"location=$6 AND "+
-		"incidents=$7 AND descriptions=$8 AND "+
-		"remediation=$9", c.DateReported, c.DateOccurredStart,
-		c.DateOccurredEnd, c.ReportSuperID, c.ReportSubID, c.Location,
-		c.Incidents, c.Descriptions, c.Remediation)
+	row := db.QueryRow("SELECT id FROM crimes WHERE university=$1 AND "+
+		"date_reported=$2 AND date_occurred=tstzrange($3, $4, '()') "+
+		"AND report_super_id=$5 AND report_sub_id=$6 AND "+
+		"location=$7 AND incidents=$8 AND descriptions=$9 AND "+
+		"remediation=$10", c.University, c.DateReported,
+		c.DateOccurredStart, c.DateOccurredEnd, c.ReportSuperID,
+		c.ReportSubID, c.Location, c.Incidents, c.Descriptions,
+		c.Remediation)
 
 	// Get ID
 	err = row.Scan(&c.ID)
@@ -132,13 +135,13 @@ func (c Crime) Insert() error {
 	}
 
 	// Insert
-	row := db.QueryRow("INSERT INTO crimes (date_reported, "+
+	row := db.QueryRow("INSERT INTO crimes (university, date_reported, "+
 		"date_occurred, report_super_id, report_sub_id, location, "+
 		"geo_loc_id, incidents, descriptions, remediation) VALUES "+
-		"($1, tstzrange($2, $3, '()'), $4, $5, $6, NULL, $7, $8, "+
-		"$9) RETURNING id",
-		c.DateReported, c.DateOccurredStart, c.DateOccurredEnd,
-		c.ReportSuperID, c.ReportSubID, c.Location,
+		"($1, $2, tstzrange($3, $4, '()'), $5, $6, $7, NULL, $8, $9, "+
+		"$10) RETURNING id",
+		c.University, c.DateReported, c.DateOccurredStart,
+		c.DateOccurredEnd, c.ReportSuperID, c.ReportSubID, c.Location,
 		c.Incidents, c.Descriptions, c.Remediation)
 
 	// Get ID

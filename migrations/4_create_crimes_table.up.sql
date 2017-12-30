@@ -1,6 +1,8 @@
 CREATE TABLE crimes (
 	id SERIAL PRIMARY KEY,
 
+	university TEXT NOT NULL,
+
 	date_reported TIMESTAMP WITH TIME ZONE NOT NULL,
 	date_occurred TSTZRANGE NOT NULL,
 
@@ -13,5 +15,5 @@ CREATE TABLE crimes (
 	incidents TEXT[] NOT NULL,
 	descriptions TEXT[] NOT NULL,
 
-	remediation TEXT
+	remediation TEXT NOT NULL
 )

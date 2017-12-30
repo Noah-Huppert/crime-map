@@ -100,11 +100,11 @@ func NewGeoLoc(raw string) *GeoLoc {
 	}
 }
 
-// QueryID attempts to find a GeoLoc model in the db with the same raw field
-// value. And sets the GeoLoc.ID field to the db row's ID. Additionally an error
-// is returned if one occurs. sql.ErrNoRows if no GeoLocs are found with the
-// specified raw value. Nil on success.
-func (l GeoLoc) QueryID() error {
+// Query attempts to find a GeoLoc model in the db with the same raw field
+// value. If a model is found, the GeoLoc.ID field is set. Additionally an
+// error is returned if one occurs. sql.ErrNoRows is returned if no GeoLocs
+// were found. Or nil on success.
+func (l GeoLoc) Query() error {
 	// Get db instance
 	db, err := dstore.NewDB()
 	if err != nil {
@@ -171,4 +171,22 @@ func (l GeoLoc) Insert() error {
 	return nil
 }
 
-// TODO: Write GeoLoc.InsertIfNew fn
+// InsertIfNew adds the GeoLoc model to the database if a model with its fields
+// does not exist. An error is returned if one occurs, or nil on success.
+func (l GeoLoc) InsertIfNew() error {
+	err := l.Query()
+
+	// Check if not found
+	if err == sql.ErrNoRows {
+		// Insert
+		err = l.Insert()
+
+		if err != nil {
+			return fmt.Errorf("error inserting geo loc model: %s",
+				err.Error())
+		}
+	}
+
+	// Success
+	return nil
+}
