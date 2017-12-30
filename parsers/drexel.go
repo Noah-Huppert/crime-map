@@ -1,12 +1,14 @@
 package parsers
 
 import (
+	"database/sql"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Noah-Huppert/crime-map/geo"
 	"github.com/Noah-Huppert/crime-map/models"
 )
 
@@ -35,11 +37,15 @@ const fieldLabelCrimeCount string = "Incident(s) Listed."
 
 // DrexelParser implements the Parser interface for Drexel University Clery
 // crime logs
-type DrexelParser struct{}
+type DrexelParser struct {
+	geoCache *geo.GeoCache
+}
 
 // NewDrexelParser creates a new DrexelParser instance
-func NewDrexelParser() *DrexelParser {
-	return &DrexelParser{}
+func NewDrexelParser(geoCache *geo.GeoCache) *DrexelParser {
+	return &DrexelParser{
+		geoCache: geoCache,
+	}
 }
 
 // Parse interprets a pdf's text fields into Crime structs. For the style of
@@ -103,7 +109,27 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 				c.DateReported = *d
 				consume--
 			} else if consume == 3 { // If consuming location field
-				// Try to find a
+				loc, err := p.geoCache.Get(field)
+
+				// No existing location
+				if err == sql.ErrNoRows {
+					// Insert
+					err = loc.Insert()
+					if err != nil {
+						return crimes, fmt.Errorf("error"+
+							" inserting new GeoLoc"+
+							" model into db: %s",
+							err.Error())
+					}
+				} else if err != nil {
+					return crimes, fmt.Errorf("error "+
+						"getting cached GeoLoc: %s",
+						err.Error())
+				}
+
+				// Set GeoLoc FK
+				c.GeoLocID = loc.ID
+
 				consume--
 			} else if consume == 2 { // If consuming report ID field
 				// Split by dash

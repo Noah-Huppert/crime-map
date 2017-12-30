@@ -1,7 +1,7 @@
 CREATE TABLE geo_locs (
 	id SERIAL PRIMARY KEY,
 
-	located BOOLEAN NOT NULL,
+	located BOOLEAN NOT NULL DEFAULT FALSE,
 
 	lat FLOAT(32),
 	long FLOAT(32),
@@ -10,8 +10,8 @@ CREATE TABLE geo_locs (
 
 	accuracy GEO_ACCURACY_T,
 
-	partial BOOLEAN,
-	bounds_provided BOOLEAN,
+	partial BOOLEAN DEFAULT FALSE,
+	bounds_provided BOOLEAN DEFAULT FALSE,
 
 	bounds_id INTEGER REFERENCES geo_bounds,
 

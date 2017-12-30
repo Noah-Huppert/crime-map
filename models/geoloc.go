@@ -1,6 +1,9 @@
 package models
 
 import (
+	"database/sql"
+	"fmt"
+
 	"github.com/Noah-Huppert/crime-map/dstore"
 )
 
@@ -100,11 +103,28 @@ func NewGeoLoc(raw string) *GeoLoc {
 	}
 }
 
+func (l GeoLoc) String() string {
+	return fmt.Sprintf("ID: %d\n"+
+		"Located: %t\n"+
+		"Lat: %f\n"+
+		"Long: %f\n"+
+		"PostalAddr: %s\n"+
+		"Accuracy: %s\n"+
+		"Partial: %t\n"+
+		"BoundsProvided: %t\n"+
+		"BoundsID: %d\n"+
+		"GAPIPlaceID: %s\n"+
+		"Raw: %s",
+		l.ID, l.Located, l.Lat, l.Long, l.PostalAddr,
+		l.Accuracy, l.Partial, l.BoundsProvided, l.BoundsID,
+		l.GAPIPlaceID, l.Raw)
+}
+
 // Query attempts to find a GeoLoc model in the db with the same raw field
 // value. If a model is found, the GeoLoc.ID field is set. Additionally an
 // error is returned if one occurs. sql.ErrNoRows is returned if no GeoLocs
 // were found. Or nil on success.
-func (l GeoLoc) Query() error {
+func (l *GeoLoc) Query() error {
 	// Get db instance
 	db, err := dstore.NewDB()
 	if err != nil {
@@ -117,6 +137,7 @@ func (l GeoLoc) Query() error {
 
 	// Get ID
 	err = row.Scan(&l.ID)
+	fmt.Printf("l.ID: %d\n", l.ID)
 
 	// Check if row found
 	if err == sql.ErrNoRows {
@@ -133,9 +154,9 @@ func (l GeoLoc) Query() error {
 
 // Insert adds a GeoLoc model to the database. An error is returned if one
 // occurs, or nil on success.
-func (l GeoLoc) Insert() error {
+func (l *GeoLoc) Insert() error {
 	// Get db instance
-	db, err := dstore.New()
+	db, err := dstore.NewDB()
 	if err != nil {
 		return fmt.Errorf("error retrieving DB instance: %s",
 			err.Error())
@@ -171,10 +192,13 @@ func (l GeoLoc) Insert() error {
 	return nil
 }
 
+/*
 // InsertIfNew adds the GeoLoc model to the database if a model with its fields
 // does not exist. An error is returned if one occurs, or nil on success.
-func (l GeoLoc) InsertIfNew() error {
-	err := l.Query()
+//
+// Uses the provided GeoCache to query for the existence of a model.
+func (l GeoLoc) InsertIfNew(geoCache *GeoCache) error {
+	l, err := geoCache
 
 	// Check if not found
 	if err == sql.ErrNoRows {
@@ -190,3 +214,4 @@ func (l GeoLoc) InsertIfNew() error {
 	// Success
 	return nil
 }
+*/

@@ -3,6 +3,7 @@ package parsers
 import (
 	"errors"
 	"fmt"
+	"github.com/Noah-Huppert/crime-map/geo"
 	"github.com/Noah-Huppert/crime-map/models"
 	"github.com/Noah-Huppert/crime-map/pdf"
 	"time"
@@ -31,15 +32,19 @@ type Report struct {
 
 	// crimes holds all the crimes found in the clery report
 	crimes []models.Crime
+
+	// geoCache is used to cache GeoLoc queries
+	geoCache *geo.GeoCache
 }
 
 // NewReport creates a new report struct with the given file path. Additionally
 // an error is returned if one occurs, or nil on success.
-func NewReport(path string) *Report {
+func NewReport(path string, geoCache *geo.GeoCache) *Report {
 	return &Report{
-		pdf:    pdf.NewPdf(path),
-		parsed: false,
-		crimes: []models.Crime{},
+		pdf:      pdf.NewPdf(path),
+		parsed:   false,
+		crimes:   []models.Crime{},
+		geoCache: geoCache,
 	}
 }
 
@@ -69,7 +74,7 @@ func (r Report) Parse() ([]models.Crime, error) {
 	}
 
 	// Parse into crimes
-	p := NewDrexelParser()
+	p := NewDrexelParser(r.geoCache)
 
 	crimes, err := p.Parse(fields)
 	if err != nil {

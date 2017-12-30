@@ -40,7 +40,7 @@ type Crime struct {
 
 	// GeoLocID is the unique ID of the Geo entry which holds the geographically
 	// encoded location in lat long form
-	GeoLocID uint `gorm:"ForeignKey:GeoLocID"`
+	GeoLocID int
 
 	// Incidents holds the official classifications of the criminal
 	// activity which took place
@@ -65,7 +65,6 @@ func (c Crime) String() string {
 		"Occurred Start: %s\n"+
 		"Occurred End: %s\n"+
 		"ID: %d-%d\n"+
-		"Location: %s\n"+
 		"GeoLocID: %d\n"+
 		"Incidents: %s\n"+
 		"Description: %s\n"+
@@ -77,7 +76,6 @@ func (c Crime) String() string {
 		c.DateOccurredEnd,
 		c.ReportSuperID,
 		c.ReportSubID,
-		c.Location,
 		c.GeoLocID,
 		strings.Join(c.Incidents, ","),
 		strings.Join(c.Descriptions, ","),
@@ -88,7 +86,7 @@ func (c Crime) String() string {
 // Query finds a model with matching attributes in the db and sets the Crime.ID
 // field if found. Additionally an error is returned. Which will be
 // sql.ErrNoRows if a matching model is not found. Or nil on success.
-func (c Crime) Query() error {
+func (c *Crime) Query() error {
 	// Get db
 	db, err := dstore.NewDB()
 	if err != nil {
@@ -99,10 +97,10 @@ func (c Crime) Query() error {
 	row := db.QueryRow("SELECT id FROM crimes WHERE university=$1 AND "+
 		"date_reported=$2 AND date_occurred=tstzrange($3, $4, '()') "+
 		"AND report_super_id=$5 AND report_sub_id=$6 AND "+
-		"location=$7 AND incidents=$8 AND descriptions=$9 AND "+
-		"remediation=$10", c.University, c.DateReported,
+		"incidents=$7 AND descriptions=$8 AND "+
+		"remediation=$9", c.University, c.DateReported,
 		c.DateOccurredStart, c.DateOccurredEnd, c.ReportSuperID,
-		c.ReportSubID, c.Location, c.Incidents, c.Descriptions,
+		c.ReportSubID, c.Incidents, c.Descriptions,
 		c.Remediation)
 
 	// Get ID
@@ -123,7 +121,7 @@ func (c Crime) Query() error {
 // Insert adds the model to the database and sets the Crime.ID field to the
 // newly inserted models ID. Additionally an error is returned if one occurs,
 // or nil on success.
-func (c Crime) Insert() error {
+func (c *Crime) Insert() error {
 	// Get db instance
 	db, err := dstore.NewDB()
 	if err != nil {
@@ -133,12 +131,11 @@ func (c Crime) Insert() error {
 
 	// Insert
 	row := db.QueryRow("INSERT INTO crimes (university, date_reported, "+
-		"date_occurred, report_super_id, report_sub_id, location, "+
-		"geo_loc_id, incidents, descriptions, remediation) VALUES "+
-		"($1, $2, tstzrange($3, $4, '()'), $5, $6, $7, NULL, $8, $9, "+
-		"$10) RETURNING id",
+		"date_occurred, report_super_id, report_sub_id, geo_loc_id, "+
+		"incidents, descriptions, remediation) VALUES ($1, $2, "+
+		"tstzrange($3, $4, '()'), $5, $6, $7, $8, $9, $10) RETURNING id",
 		c.University, c.DateReported, c.DateOccurredStart,
-		c.DateOccurredEnd, c.ReportSuperID, c.ReportSubID, c.Location,
+		c.DateOccurredEnd, c.ReportSuperID, c.ReportSubID, c.GeoLocID,
 		c.Incidents, c.Descriptions, c.Remediation)
 
 	// Get ID
@@ -153,7 +150,7 @@ func (c Crime) Insert() error {
 
 // SaveIfNew saves the current Crime model if it does not exist in the db.
 // Returns an error if one occurs, or nil on success.
-func (c Crime) SaveIfNew() error {
+func (c *Crime) SaveIfNew() error {
 	// Query
 	err := c.Query()
 	if (err != nil) && (err != sql.ErrNoRows) {
