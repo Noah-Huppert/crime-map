@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/Noah-Huppert/crime-map/config"
-	"github.com/Noah-Huppert/crime-map/dstore"
 	"github.com/Noah-Huppert/crime-map/models"
 	"github.com/Noah-Huppert/crime-map/parsers"
 
@@ -45,7 +44,7 @@ func main() {
 
 	// Print crimes
 	for _, crime := range crimes {
-		if _, err = dstore.SaveIfNot(&crime, &crime); err != nil {
+		if err = crime.SaveIfNew(); err != nil {
 			fmt.Printf("error saving crime: %s\n", err.Error())
 			os.Exit(1)
 		}

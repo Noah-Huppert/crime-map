@@ -1,5 +1,9 @@
 package models
 
+import (
+	"github.com/Noah-Huppert/crime-map/dstore"
+)
+
 const (
 	// StatusOk indicates that a GAPI request was successful
 	StatusOk string = "OK"
@@ -45,17 +49,18 @@ const (
 // strings into lat long coords. GeoLoc also holds some additional accuracy
 // information, as not all locations can be resolved exactly.
 type GeoLoc struct {
-	Model
+	// ID is the unique identifier
+	ID int
 
 	// Located indicates if the raw location has been geocoded using the
 	// GAPI
 	Located bool
 
 	// Lat is the latitude of the location
-	Lat float64
+	Lat float32
 
 	// Long is the longitude of the location
-	Long float64
+	Long float32
 
 	// PostalAddr holds the formatted postal address of the location
 	PostalAddr string
@@ -67,36 +72,12 @@ type GeoLoc struct {
 	// Partial indicates if the match is only a partial
 	Partial bool
 
-	// NeViewLat holds the recommended latitude which the northeast corner
-	// of the map viewport should be located at
-	NeViewLat float64
-
-	// NeViewLong holds the recommended longitude which the northeast corner
-	// of the map viewport should be located at
-	NeViewLong float64
-
-	// SwViewLat holds the recommended latitude which the southwest corner
-	// of the map viewport should be located at
-	SwViewLat float64
-
-	// SwViewLong holds the recommended longitude which the southwest corner
-	// of the map viewport should be located at
-	SwViewLong float64
-
 	// BoundsProvided indicates whether any location bounds were provided
 	BoundsProvided bool
 
-	// NeBoundsLat holds the location bounds northeast latitude
-	NeBoundsLat float64
-
-	// NeBoundsLong holds the location bounds northeast longitude
-	NeBoundsLong float64
-
-	// SwBoundsLat holds the location bounds southwest latitude
-	SwBoundsLat float64
-
-	// SwBoundsLong holds the location bounds southwest longitude
-	SwBoundsLong float64
+	// BoundsID holds the GeoBounds ID representing the area the location
+	// covers
+	BoundsID uint
 
 	// GAPIPlaceID holds the GAPI location ID, used to retrieve additional
 	// information about a location using the GAPI
@@ -118,3 +99,76 @@ func NewGeoLoc(raw string) *GeoLoc {
 		Raw:     raw,
 	}
 }
+
+// QueryID attempts to find a GeoLoc model in the db with the same raw field
+// value. And sets the GeoLoc.ID field to the db row's ID. Additionally an error
+// is returned if one occurs. sql.ErrNoRows if no GeoLocs are found with the
+// specified raw value. Nil on success.
+func (l GeoLoc) QueryID() error {
+	// Get db instance
+	db, err := dstore.NewDB()
+	if err != nil {
+		return fmt.Errorf("error retrieving db instance: %s",
+			err.Error())
+	}
+
+	// Query
+	row := db.QueryRow("SELECT id FROM geo_locs WHERE raw = $1", l.Raw)
+
+	// Get ID
+	err = row.Scan(&l.ID)
+
+	// Check if row found
+	if err == sql.ErrNoRows {
+		// If not, return so we can identify
+		return err
+	} else if err != nil {
+		return fmt.Errorf("error reading GeoLoc ID from row: %s",
+			err.Error())
+	}
+
+	// Success
+	return nil
+}
+
+// Insert adds a GeoLoc model to the database. An error is returned if one
+// occurs, or nil on success.
+func (l GeoLoc) Insert() error {
+	// Get db instance
+	db, err := dstore.New()
+	if err != nil {
+		return fmt.Errorf("error retrieving DB instance: %s",
+			err.Error())
+	}
+
+	// Insert
+	var row *sql.Row
+
+	// Check if GeoLoc has been parsed
+	if l.Located {
+		// If so, save all fields
+		row = db.QueryRow("INSERT INTO geo_locs (located, lat, long,"+
+			" postal_addr, accuracy, partial, bounds_provided, "+
+			"bounds_id, gapi_place_id, raw) VALUES ($1, $2, $3, $4"+
+			", $5, $6, $7, $8, $9, $10) RETURNING id",
+			l.Located, l.Lat, l.Long, l.PostalAddr, l.Accuracy,
+			l.Partial, l.BoundsProvided, l.BoundsID, l.GAPIPlaceID,
+			l.Raw)
+	} else {
+		// If not, only save a couple, and leave rest null
+		row = db.QueryRow("INSERT INTO geo_locs (located, raw) VALUES"+
+			" ($1, $2) RETURNING id",
+			l.Located, l.Raw)
+	}
+
+	// Get inserted row ID
+	err = row.Scan(&l.ID)
+	if err != nil {
+		return fmt.Errorf("error inserting row, Located: %t, err: %s",
+			l.Located, err.Error())
+	}
+
+	return nil
+}
+
+// TODO: Write GeoLoc.InsertIfNew fn
