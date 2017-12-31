@@ -8,27 +8,6 @@ import (
 )
 
 const (
-	// StatusOk indicates that a GAPI request was successful
-	StatusOk string = "OK"
-
-	// StatusZero indicates that the GAPI request didn't return any results
-	StatusZero string = "ZERO_RESULTS"
-
-	// StatusLimit indicates that we have gone over the GAPI query limit
-	StatusLimit string = "OVER_QUERY_LIMIT"
-
-	// StatusDenied indicates that the GAPI request was denied
-	StatusDenied string = "REQUEST_DENIED"
-
-	// StatusInvalid indicates that the GAPI request was invalid
-	StatusInvalid string = "INVALID_REQUEST"
-
-	// StatusErr indicates that an unknown error occurred during the GAPI
-	// request
-	StatusErr string = "UNKNOWN_ERROR"
-)
-
-const (
 	// AccuracyPerfect indicates that the location provided by the GAPI
 	// is exact
 	AccuracyPerfect string = "ROOFTOP"
@@ -59,6 +38,9 @@ type GeoLoc struct {
 	// GAPI
 	Located bool
 
+	// GAPISuccess indicates if the GAPI locate request succeeded
+	GAPISuccess bool
+
 	// Lat is the latitude of the location
 	Lat float32
 
@@ -86,10 +68,6 @@ type GeoLoc struct {
 	// information about a location using the GAPI
 	GAPIPlaceID string
 
-	// GAPIStatus holds the status of the GAPI Geocoding request which was
-	// sent to locate the location
-	GAPIStatus string
-
 	// Raw holds the text present on the crime report which the GeoLoc
 	// attempts to locate
 	Raw string
@@ -106,6 +84,7 @@ func NewGeoLoc(raw string) *GeoLoc {
 func (l GeoLoc) String() string {
 	return fmt.Sprintf("ID: %d\n"+
 		"Located: %t\n"+
+		"GAPISuccess: %t\n"+
 		"Lat: %f\n"+
 		"Long: %f\n"+
 		"PostalAddr: %s\n"+
@@ -115,7 +94,7 @@ func (l GeoLoc) String() string {
 		"BoundsID: %d\n"+
 		"GAPIPlaceID: %s\n"+
 		"Raw: %s",
-		l.ID, l.Located, l.Lat, l.Long, l.PostalAddr,
+		l.ID, l.Located, l.GAPISuccess, l.Lat, l.Long, l.PostalAddr,
 		l.Accuracy, l.Partial, l.BoundsProvided, l.BoundsID,
 		l.GAPIPlaceID, l.Raw)
 }
@@ -137,7 +116,6 @@ func (l *GeoLoc) Query() error {
 
 	// Get ID
 	err = row.Scan(&l.ID)
-	fmt.Printf("l.ID: %d\n", l.ID)
 
 	// Check if row found
 	if err == sql.ErrNoRows {
@@ -168,13 +146,14 @@ func (l *GeoLoc) Insert() error {
 	// Check if GeoLoc has been parsed
 	if l.Located {
 		// If so, save all fields
-		row = db.QueryRow("INSERT INTO geo_locs (located, lat, long,"+
-			" postal_addr, accuracy, partial, bounds_provided, "+
-			"bounds_id, gapi_place_id, raw) VALUES ($1, $2, $3, $4"+
-			", $5, $6, $7, $8, $9, $10) RETURNING id",
-			l.Located, l.Lat, l.Long, l.PostalAddr, l.Accuracy,
-			l.Partial, l.BoundsProvided, l.BoundsID, l.GAPIPlaceID,
-			l.Raw)
+		row = db.QueryRow("INSERT INTO geo_locs (located, gapi_success"+
+			", lat, long, postal_addr, accuracy, partial, "+
+			"bounds_provided, bounds_id, gapi_place_id, raw) VALUES"+
+			" ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING"+
+			" id",
+			l.Located, l.GAPISuccess, l.Lat, l.Long, l.PostalAddr,
+			l.Accuracy, l.Partial, l.BoundsProvided, l.BoundsID,
+			l.GAPIPlaceID, l.Raw)
 	} else {
 		// If not, only save a couple, and leave rest null
 		row = db.QueryRow("INSERT INTO geo_locs (located, raw) VALUES"+
