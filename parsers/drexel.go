@@ -245,7 +245,6 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 			consumeFix = false
 
 			// And add crime to list
-			c.University = DrexelUName
 			crimes = append(crimes, c)
 			c = models.Crime{}
 		} else if field == fieldLabelReported { // Check if beginning

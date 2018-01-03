@@ -10,6 +10,10 @@ import (
 	"github.com/Noah-Huppert/crime-map/models"
 )
 
+// QueryParamOffsetKey holds the key which the offset query parameter will be
+// passed by
+const QueryParamOffsetKey string = "offset"
+
 // QueryParamLimitKey holds the key which the limit query parameter will be
 // passed by
 const QueryParamLimitKey string = "limit"
@@ -22,15 +26,26 @@ const QueryParamOrderByKey string = "order_by"
 // in
 const RespKeyCrimes string = "crimes"
 
-// GetCrimesHandler lists the existing crimes in the database
+// GetCrimesHandler lists the existing crimes in the database. It expects
+// the following query parameters:
+//
+//	- offset (uint): Index of first element to return, 0 would return the
+//			 the first item, 10 would return the 10th item.
+// 	- limit (uint): Index of last element to return.
+//	- order_by (date_occurred|date_reported): Specifies how to order
+//					          returned results.
 type GetCrimesHandler struct{}
 
 // Register implements Registerable for GetCrimesHandler
 func (h GetCrimesHandler) Register(r *mux.Router) error {
 	r.Path("/api/v1/crimes").
 		Methods("GET").
-		Queries("limit", "{limit:.+}").
-		Queries("order_by", "{order_by:.+}").
+		Queries(QueryParamOffsetKey, fmt.Sprintf("{%s:.+}",
+			QueryParamOffsetKey)).
+		Queries(QueryParamLimitKey, fmt.Sprintf("{%s:.+}",
+			QueryParamLimitKey)).
+		Queries(QueryParamOrderByKey, fmt.Sprintf("{%s:.+}"),
+			QueryParamOrderByKey).
 		Handler(GetCrimesHandler{})
 
 	return nil

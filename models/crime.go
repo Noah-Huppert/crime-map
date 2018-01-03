@@ -47,8 +47,9 @@ type Crime struct {
 	// ID is a unique identifier
 	ID int
 
-	// University indicates which university the crime was reported by
-	University string
+	// ReportID is the unique identifier of the Report the crime was parsed
+	// from
+	ReportID int
 
 	// DateReported records when the criminal activity was disclosed to the
 	// police
@@ -106,7 +107,7 @@ func NewCrime(rows *sql.Rows) (*Crime, error) {
 	// Parse
 	// TODO: Figure out how to parse date range var d
 	var d interface{}
-	if err := rows.Scan(&crime.ID, &crime.University, &crime.DateReported,
+	if err := rows.Scan(&crime.ID, &crime.ReportID, &crime.DateReported,
 		&d, &crime.ReportSuperID, &crime.ReportSubID, &crime.GeoLocID,
 		&crime.Incidents, &crime.Descriptions, &crime.Remediation); err != nil {
 		return crime, fmt.Errorf("error parsing crime values from row"+
@@ -118,7 +119,7 @@ func NewCrime(rows *sql.Rows) (*Crime, error) {
 }
 
 func (c Crime) String() string {
-	return fmt.Sprintf("University: %s\n"+
+	return fmt.Sprintf("ReportID: %d\n"+
 		"Reported: %s\n"+
 		"Occurred Start: %s\n"+
 		"Occurred End: %s\n"+
@@ -128,7 +129,7 @@ func (c Crime) String() string {
 		"Description: %s\n"+
 		"Remediation: %s\n"+
 		"Parse Errors: %s",
-		c.University,
+		c.ReportID,
 		c.DateReported,
 		c.DateOccurredStart,
 		c.DateOccurredEnd,
@@ -152,11 +153,11 @@ func (c *Crime) Query() error {
 	}
 
 	// Query
-	row := db.QueryRow("SELECT id FROM crimes WHERE university=$1 AND "+
+	row := db.QueryRow("SELECT id FROM crimes WHERE report_id=$1 AND "+
 		"date_reported=$2 AND date_occurred=tstzrange($3, $4, '()') "+
 		"AND report_super_id=$5 AND report_sub_id=$6 AND "+
 		"incidents=$7 AND descriptions=$8 AND "+
-		"remediation=$9", c.University, c.DateReported,
+		"remediation=$9", c.ReportID, c.DateReported,
 		c.DateOccurredStart, c.DateOccurredEnd, c.ReportSuperID,
 		c.ReportSubID, c.Incidents, c.Descriptions,
 		c.Remediation)
@@ -188,11 +189,11 @@ func (c *Crime) Insert() error {
 	}
 
 	// Insert
-	row := db.QueryRow("INSERT INTO crimes (university, date_reported, "+
+	row := db.QueryRow("INSERT INTO crimes (report_id, date_reported, "+
 		"date_occurred, report_super_id, report_sub_id, geo_loc_id, "+
 		"incidents, descriptions, remediation) VALUES ($1, $2, "+
 		"tstzrange($3, $4, '()'), $5, $6, $7, $8, $9, $10) RETURNING id",
-		c.University, c.DateReported, c.DateOccurredStart,
+		c.ReportID, c.DateReported, c.DateOccurredStart,
 		c.DateOccurredEnd, c.ReportSuperID, c.ReportSubID, c.GeoLocID,
 		c.Incidents, c.Descriptions, c.Remediation)
 
@@ -252,7 +253,7 @@ func QueryAllCrimes(limit uint, orderBy OrderByType) ([]*Crime, error) {
 	}
 
 	// Query
-	rows, err := db.Query("SELECT id, university, date_reported, "+
+	rows, err := db.Query("SELECT id, report_id, date_reported, "+
 		"date_occurred, report_super_id, report_sub_id, "+
 		"geo_loc_id, incidents, descriptions, remediation "+
 		"FROM crimes ORDER BY $1 DESC LIMIT $2",
