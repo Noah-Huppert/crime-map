@@ -7,22 +7,43 @@ import (
 	"github.com/Noah-Huppert/crime-map/dstore"
 )
 
+type GeoLocAccuracy string
+
 const (
 	// AccuracyPerfect indicates that the location provided by the GAPI
 	// is exact
-	AccuracyPerfect string = "ROOFTOP"
+	AccuracyPerfect GeoLocAccuracy = "ROOFTOP"
 
 	// AccuracyBetween indicates that the location provided by the GAPI
 	// is between two addresses
-	AccuracyBetween string = "RANGE_INTERPOLATED"
+	AccuracyBetween GeoLocAccuracy = "RANGE_INTERPOLATED"
 
 	// AccuracyCenter indicates that the location is in the middle of an
 	// region. Such as a block
-	AccuracyCenter string = "GEOMETRIC_CENTER"
+	AccuracyCenter GeoLocAccuracy = "GEOMETRIC_CENTER"
 
 	// AccuracyApprox indicates that the location is not exact
-	AccuracyApprox string = "APPROXIMATE"
+	AccuracyApprox GeoLocAccuracy = "APPROXIMATE"
+
+	// AccuracyErr indicates that an invalid string value was provided
+	// when creating a GeoLocAccuracy
+	AccuracyErr GeoLocAccuracy = "ERR"
 )
+
+func NewGeoLocAccuracy(str string) (GeoLocAccuracy, error) {
+	if str == string(AccuracyPerfect) {
+		return AccuracyPerfect, nil
+	} else if str == string(AccuracyBetween) {
+		return AccuracyBetween, nil
+	} else if str == string(AccuracyCenter) {
+		return AccuracyCenter, nil
+	} else if str == string(AccuracyApprox) {
+		return AccuracyApprox, nil
+	} else {
+		return AccuracyErr, fmt.Errorf("unknown GeoLocAccuracy string "+
+			", str: %s", str)
+	}
+}
 
 // GeoLoc holds information about the geographical location of a crime "location"
 // field.
@@ -42,27 +63,28 @@ type GeoLoc struct {
 	GAPISuccess bool
 
 	// Lat is the latitude of the location
-	Lat float32
+	Lat float64
 
 	// Long is the longitude of the location
-	Long float32
+	Long float64
 
 	// PostalAddr holds the formatted postal address of the location
 	PostalAddr string
 
 	// Accuracy indicates how close to the provided location the lat long
 	// are
-	Accuracy string
-
-	// Partial indicates if the match is only a partial
-	Partial bool
+	Accuracy GeoLocAccuracy
 
 	// BoundsProvided indicates whether any location bounds were provided
 	BoundsProvided bool
 
-	// BoundsID holds the GeoBounds ID representing the area the location
-	// covers
-	BoundsID uint
+	// BoundsID holds the GeoBounds ID which specifies the location of the
+	// crime
+	BoundsID sql.NullInt64
+
+	// ViewportBoundsID holds the GeoBounds ID which specifies the
+	// recommended viewport for looking at the crime location
+	ViewportBoundsID int
 
 	// GAPIPlaceID holds the GAPI location ID, used to retrieve additional
 	// information about a location using the GAPI
@@ -81,6 +103,23 @@ func NewGeoLoc(raw string) *GeoLoc {
 	}
 }
 
+// NewUnlocatedGeoLoc creates a new GeoLoc instance from the currently selected
+// result set in the provided sql.Rows object. This row should select the id
+// and raw fields, in that order. An error will be returned if one occurs, nil
+// on success.
+func NewUnlocatedGeoLoc(row *sql.Rows) (*GeoLoc, error) {
+	loc := NewGeoLoc("")
+
+	// Parse
+	if err := row.Scan(&loc.ID, &loc.Raw); err != nil {
+		return nil, fmt.Errorf("error reading field values from row: %s",
+			err.Error())
+	}
+
+	// Success
+	return loc, nil
+}
+
 func (l GeoLoc) String() string {
 	return fmt.Sprintf("ID: %d\n"+
 		"Located: %t\n"+
@@ -89,13 +128,13 @@ func (l GeoLoc) String() string {
 		"Long: %f\n"+
 		"PostalAddr: %s\n"+
 		"Accuracy: %s\n"+
-		"Partial: %t\n"+
 		"BoundsProvided: %t\n"+
 		"BoundsID: %d\n"+
+		"ViewportBoundsID: %d\n"+
 		"GAPIPlaceID: %s\n"+
 		"Raw: %s",
 		l.ID, l.Located, l.GAPISuccess, l.Lat, l.Long, l.PostalAddr,
-		l.Accuracy, l.Partial, l.BoundsProvided, l.BoundsID,
+		l.Accuracy, l.BoundsProvided, l.BoundsID, l.ViewportBoundsID,
 		l.GAPIPlaceID, l.Raw)
 }
 
@@ -130,6 +169,108 @@ func (l *GeoLoc) Query() error {
 	return nil
 }
 
+// Update sets an existing GeoLoc model's fields to new values. Only updates the
+// located and raw fields if located == false. Updates all fields if
+// located == true.
+//
+// It relies on the raw field to specify exactly which row to update. The row
+// column has a unique constraint, so this is sufficient.
+//
+// An error is returned if one occurs, or nil on success.
+func (l GeoLoc) Update() error {
+	// Get database instance
+	db, err := dstore.NewDB()
+	if err != nil {
+		return fmt.Errorf("error retrieving database instance: %s",
+			err.Error())
+	}
+
+	// Update
+	var row *sql.Row
+
+	// If not located
+	if !l.Located {
+		row = db.QueryRow("UPDATE geo_locs SET located = $1, raw = "+
+			"$2 WHERE raw = $2 RETURNING id", l.Located, l.Raw)
+	} else {
+		// If located
+		row = db.QueryRow("UPDATE geo_locs SET located = $1, "+
+			"gapi_success = $2, lat = $3, long = $4, "+
+			"postal_addr = $5, accuracy = $6, bounds_provided = $7,"+
+			"bounds_id = $8, viewport_bounds_id = $9, "+
+			"gapi_place_id = $10, raw = $11 WHERE raw = $11 "+
+			"RETURNING id",
+			l.Located, l.GAPISuccess, l.Lat, l.Long, l.PostalAddr,
+			l.Accuracy, l.BoundsProvided, l.BoundsID,
+			l.ViewportBoundsID, l.GAPIPlaceID, l.Raw)
+	}
+
+	// Set ID
+	err = row.Scan(&l.ID)
+
+	// If doesn't exist
+	if err == sql.ErrNoRows {
+		// Return error so we can identify
+		return err
+	} else if err != nil {
+		// Other error
+		return fmt.Errorf("error updating GeoLoc, located: %t, err: %s",
+			l.Located, err.Error())
+	}
+
+	// Success
+	return nil
+}
+
+// QueryUnlocatedGeoLocs finds all GeoLoc models which have not been located on
+// a map. Additionally an error is returned if one occurs, or nil on success.
+func QueryUnlocatedGeoLocs() ([]*GeoLoc, error) {
+	locs := []*GeoLoc{}
+
+	// Get db
+	db, err := dstore.NewDB()
+	if err != nil {
+		return locs, fmt.Errorf("error retrieving database instance: %s",
+			err.Error())
+	}
+
+	// Query
+	rows, err := db.Query("SELECT id, raw FROM geo_locs WHERE located = " +
+		"false")
+
+	// Check if no results
+	if err == sql.ErrNoRows {
+		// If not results, return raw error so we can identify
+		return locs, err
+	} else if err != nil {
+		// Other error
+		return locs, fmt.Errorf("error querying for unlocated GeoLocs"+
+			": %s", err.Error())
+	}
+
+	// Parse rows into GeoLocs
+	for rows.Next() {
+		// Parse
+		loc, err := NewUnlocatedGeoLoc(rows)
+		if err != nil {
+			return locs, fmt.Errorf("error creating unlocated "+
+				"GeoLoc from row: %s", err.Error())
+		}
+
+		// Add to list
+		locs = append(locs, loc)
+	}
+
+	// Close
+	if err = rows.Close(); err != nil {
+		return locs, fmt.Errorf("error closing query: %s",
+			err.Error())
+	}
+
+	// Success
+	return locs, nil
+}
+
 // Insert adds a GeoLoc model to the database. An error is returned if one
 // occurs, or nil on success.
 func (l *GeoLoc) Insert() error {
@@ -147,13 +288,13 @@ func (l *GeoLoc) Insert() error {
 	if l.Located {
 		// If so, save all fields
 		row = db.QueryRow("INSERT INTO geo_locs (located, gapi_success"+
-			", lat, long, postal_addr, accuracy, partial, "+
-			"bounds_provided, bounds_id, gapi_place_id, raw) VALUES"+
-			" ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING"+
-			" id",
+			", lat, long, postal_addr, accuracy, bounds_provided, "+
+			"bounds_id, viewport_bounds_id, gapi_place_id, raw) "+
+			"VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) "+
+			"RETURNING id",
 			l.Located, l.GAPISuccess, l.Lat, l.Long, l.PostalAddr,
-			l.Accuracy, l.Partial, l.BoundsProvided, l.BoundsID,
-			l.GAPIPlaceID, l.Raw)
+			l.Accuracy, l.BoundsProvided, l.BoundsID,
+			l.ViewportBoundsID, l.GAPIPlaceID, l.Raw)
 	} else {
 		// If not, only save a couple, and leave rest null
 		row = db.QueryRow("INSERT INTO geo_locs (located, raw) VALUES"+
@@ -170,27 +311,3 @@ func (l *GeoLoc) Insert() error {
 
 	return nil
 }
-
-/*
-// InsertIfNew adds the GeoLoc model to the database if a model with its fields
-// does not exist. An error is returned if one occurs, or nil on success.
-//
-// Uses the provided GeoCache to query for the existence of a model.
-func (l GeoLoc) InsertIfNew(geoCache *GeoCache) error {
-	l, err := geoCache
-
-	// Check if not found
-	if err == sql.ErrNoRows {
-		// Insert
-		err = l.Insert()
-
-		if err != nil {
-			return fmt.Errorf("error inserting geo loc model: %s",
-				err.Error())
-		}
-	}
-
-	// Success
-	return nil
-}
-*/

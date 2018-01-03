@@ -4,8 +4,8 @@ CREATE TABLE geo_locs (
 	located BOOLEAN NOT NULL DEFAULT FALSE,
 	gapi_success BOOLEAN NOT NULL DEFAULT FALSE,
 
-	lat FLOAT(32),
-	long FLOAT(32),
+	lat DOUBLE PRECISION,
+	long DOUBLE PRECISION,
 
 	postal_addr TEXT,
 
@@ -15,6 +15,7 @@ CREATE TABLE geo_locs (
 	bounds_provided BOOLEAN DEFAULT FALSE,
 
 	bounds_id INTEGER REFERENCES geo_bounds,
+	viewport_bounds_id INTEGER REFERENCES geo_bounds,
 
 	gapi_place_id TEXT,
 

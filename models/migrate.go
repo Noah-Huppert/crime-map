@@ -25,7 +25,7 @@ func Migrate() error {
 
 	// Create migrator
 	migrator, err := migrate.NewWithDatabaseInstance(
-		"file://migrations",
+		"file://./migrations",
 		"postgres", driver)
 	if err != nil {
 		return fmt.Errorf("error making migrator instance: %s",

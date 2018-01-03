@@ -1,7 +1,6 @@
 package parsers
 
 import (
-	"database/sql"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -109,19 +108,12 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 				c.DateReported = *d
 				consume--
 			} else if consume == 3 { // If consuming location field
-				loc, err := p.geoCache.Get(field)
+				// Gets GeoLoc with just a populated ID field.
+				// This allows us to set the crime foreign key,
+				// but not know anything about the location
+				loc, err := p.geoCache.InsertIfNew(field)
 
-				// No existing location
-				if err == sql.ErrNoRows {
-					// Insert
-					err = loc.Insert()
-					if err != nil {
-						return crimes, fmt.Errorf("error"+
-							" inserting new GeoLoc"+
-							" model into db: %s",
-							err.Error())
-					}
-				} else if err != nil {
+				if err != nil {
 					return crimes, fmt.Errorf("error "+
 						"getting cached GeoLoc: %s",
 						err.Error())
@@ -223,6 +215,8 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 						fixedEnd.String()),
 					ErrType: models.TypeBadRangeEnd,
 				}
+
+				// Save parse error
 				c.ParseErrors = append(c.ParseErrors, pErr)
 
 				// If success, replace
@@ -251,10 +245,9 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 			consumeFix = false
 
 			// And add crime to list
+			c.University = DrexelUName
 			crimes = append(crimes, c)
-			c = models.Crime{
-				University: DrexelUName,
-			}
+			c = models.Crime{}
 		} else if field == fieldLabelReported { // Check if beginning
 			// of glob 1
 			skip = 2

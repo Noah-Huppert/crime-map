@@ -1,7 +1,7 @@
 CREATE TABLE parse_errors (
 	id SERIAL PRIMARY KEY,
 
-	crime_id INTEGER REFERENCES crimes,
+	crime_id INTEGER REFERENCES crimes NOT NULL,
 
 	field TEXT NOT NULL,
 	original TEXT NOT NULL,

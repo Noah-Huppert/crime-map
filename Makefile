@@ -1,4 +1,4 @@
-.PHONY: run imports fmt db db-rm view
+.PHONY: run imports fmt db db-rm db-stop view
 
 # General
 APP_ENV=develop
@@ -46,3 +46,7 @@ db:
 # Deletes the postgres db
 db-rm:
 	docker rm ${DB_DOCKER_NAME}
+
+# Stop the database
+db-stop:
+	docker stop $(shell docker ps -qaf name=${DB_DOCKER_NAME})

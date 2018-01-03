@@ -148,15 +148,11 @@ func (c *Crime) Insert() error {
 	return nil
 }
 
-// SaveIfNew saves the current Crime model if it does not exist in the db.
+// InsertIfNew saves the current Crime model if it does not exist in the db.
 // Returns an error if one occurs, or nil on success.
-func (c *Crime) SaveIfNew() error {
+func (c *Crime) InsertIfNew() error {
 	// Query
 	err := c.Query()
-	if (err != nil) && (err != sql.ErrNoRows) {
-		return fmt.Errorf("error determining if crime is new: %s",
-			err.Error())
-	}
 
 	// Check if doesn't exist
 	if err == sql.ErrNoRows {
@@ -166,6 +162,10 @@ func (c *Crime) SaveIfNew() error {
 			return fmt.Errorf("error inserting non existing model: %s",
 				err.Error())
 		}
+	} else if err != nil {
+		// General error
+		return fmt.Errorf("error determining if crime is new: %s",
+			err.Error())
 	}
 
 	// Success

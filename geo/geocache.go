@@ -52,3 +52,27 @@ func (c GeoCache) Get(raw string) (*models.GeoLoc, error) {
 	// Success
 	return loc, nil
 }
+
+// InsertIfNew inserts the GeoLoc model into the database if it does not exist.
+// The ID of the model in the database will be set in the GeoLoc.ID field. An
+// error is returned if one occurs, nil on success.
+func (c GeoCache) InsertIfNew(raw string) (*models.GeoLoc, error) {
+	// Query
+	loc, err := c.Get(raw)
+
+	// Check if model doesn't exist
+	if err == sql.ErrNoRows {
+		// Insert
+		if err = loc.Insert(); err != nil {
+			return nil, fmt.Errorf("error inserting non-existent GeoLoc"+
+				" model: %s", err.Error())
+		}
+	} else if err != nil {
+		// General error
+		return nil, fmt.Errorf("error querying for GeoLoc model: %s",
+			err.Error())
+	}
+
+	// Success
+	return loc, nil
+}
