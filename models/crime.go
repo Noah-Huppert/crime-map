@@ -88,7 +88,10 @@ type Crime struct {
 
 	// ParseErrors holds any errors that occur while parsing the crime.
 	// These will be saved in other db tables depending on their types.
-	ParseErrors []ParseError
+	//
+	// This field is used internally only. Not serialized and sent as
+	// part of any API responses.
+	ParseErrors []ParseError `json:"-"`
 }
 
 // NewCrime creates a new Crime model from a database query sql.Rows
