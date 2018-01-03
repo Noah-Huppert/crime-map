@@ -16,6 +16,10 @@ import (
 // should look for locations
 const region string = "us"
 
+// unknownLocRaw is the raw string value of the GeoLoc which indicates that a
+// crime's location is unknown
+const unknownLocRaw string = "UNKNOWN LOCATION - Non-reportable Location"
+
 // Locater uses the Google Maps API to determine exactly where new GeoLoc
 // models are in the world
 type Locater struct{}
@@ -29,10 +33,19 @@ func NewLocater() *Locater {
 // bounds and lat long. An error is returned if one occurs, or nil on success.
 //
 // A context must be provided to manage the GAPI request's running.
+//
+// If the GeoLoc provided is indicates the location is unknown, the method
+// returns immediately.
 func (l Locater) Locate(ctx context.Context, loc *models.GeoLoc) error {
 	// Check if located
 	if loc.Located {
 		return fmt.Errorf("geoloc model already located")
+	}
+
+	// Check if unknown
+	if loc.Raw == unknownLocRaw {
+		// Just exit
+		return nil
 	}
 
 	// Get api client

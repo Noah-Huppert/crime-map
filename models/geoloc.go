@@ -193,6 +193,11 @@ func (l GeoLoc) Update() error {
 		row = db.QueryRow("UPDATE geo_locs SET located = $1, raw = "+
 			"$2 WHERE raw = $2 RETURNING id", l.Located, l.Raw)
 	} else {
+		// Check accuracy value
+		if l.Accuracy == AccuracyErr {
+			return fmt.Errorf("invalid accuracy value: %s",
+				l.Accuracy)
+		}
 		// If located
 		row = db.QueryRow("UPDATE geo_locs SET located = $1, "+
 			"gapi_success = $2, lat = $3, long = $4, "+
@@ -286,6 +291,12 @@ func (l *GeoLoc) Insert() error {
 
 	// Check if GeoLoc has been parsed
 	if l.Located {
+		// Check accuracy value
+		if l.Accuracy == AccuracyErr {
+			return fmt.Errorf("invalid accuracy value: %s",
+				l.Accuracy)
+		}
+
 		// If so, save all fields
 		row = db.QueryRow("INSERT INTO geo_locs (located, gapi_success"+
 			", lat, long, postal_addr, accuracy, bounds_provided, "+

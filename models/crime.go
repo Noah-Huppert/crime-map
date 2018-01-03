@@ -9,6 +9,38 @@ import (
 	"time"
 )
 
+// OrderByType is the type alias used to represent the field used to order rows
+// by in the QueryAll method
+type OrderByType string
+
+const (
+	// OrderByReported indicates that the QueryAll function should order
+	// results by the date_reported field
+	OrderByReported OrderByType = "date_reported"
+
+	// OrderByOccurred indicates that the QueryAll function should order
+	// results by the date_occurred field
+	OrderByOccurred OrderByType = "date_occurred"
+
+	// OrderByErr indicates that the created OrderByType had an invalid
+	// string value
+	OrderByErr OrderByType = "invalid"
+)
+
+// NewOrderByType creates an OrderByType with the specified string value. An
+// error is returned if the provided string value is not a valid OrderByType.
+// Or nil on success.
+func NewOrderByType(val string) (OrderByType, error) {
+	if val == string(OrderByReported) {
+		return OrderByReported, nil
+	} else if val == string(OrderByOccurred) {
+		return OrderByOccurred, nil
+	} else {
+		return OrderByErr, fmt.Errorf("invalid OrderByType value: %s",
+			val)
+	}
+}
+
 // Crime structs hold information about criminal activity reported by Clery
 // act reports
 type Crime struct {
@@ -57,6 +89,29 @@ type Crime struct {
 	// ParseErrors holds any errors that occur while parsing the crime.
 	// These will be saved in other db tables depending on their types.
 	ParseErrors []ParseError
+}
+
+// NewCrime creates a new Crime model from a database query sql.Rows
+// result set. This query should select the id, university, date_reported,
+// date_occurred, report_super_id, report_sub_id, geo_loc_id, incidents,
+// descriptions, and remediations fields.
+//
+// An Crime instance and error is returned. Nil on success.
+func NewCrime(rows *sql.Rows) (*Crime, error) {
+	crime := &Crime{}
+
+	// Parse
+	// TODO: Figure out how to parse date range var d
+	var d interface{}
+	if err := rows.Scan(&crime.ID, &crime.University, &crime.DateReported,
+		&d, &crime.ReportSuperID, &crime.ReportSubID, &crime.GeoLocID,
+		&crime.Incidents, &crime.Descriptions, &crime.Remediation); err != nil {
+		return crime, fmt.Errorf("error parsing crime values from row"+
+			": %s", err.Error())
+	}
+
+	// Success
+	return crime, nil
 }
 
 func (c Crime) String() string {
@@ -170,4 +225,52 @@ func (c *Crime) InsertIfNew() error {
 
 	// Success
 	return nil
+}
+
+// QueryAllCrimes retrieves the specified number of Crime models from the
+// database. Ordered by the field specified in the orderBy argument. Must be
+// one of 'date_reported' or 'date_occurred'. An array of Crimes are returned,
+// along with an error. Which is nil on success.
+//
+// Retrieves all crime columns.
+func QueryAllCrimes(limit uint, orderBy OrderByType) ([]*Crime, error) {
+	crimes := []*Crime{}
+
+	// Check orderBy var
+	if orderBy == OrderByErr {
+		return crimes, fmt.Errorf("invalid orderBy value: %s", orderBy)
+	}
+
+	// Get db
+	db, err := dstore.NewDB()
+	if err != nil {
+		return crimes, fmt.Errorf("error retrieving database instance"+
+			": %s", err.Error())
+	}
+
+	// Query
+	rows, err := db.Query("SELECT id, university, date_reported, "+
+		"date_occurred, report_super_id, report_sub_id, "+
+		"geo_loc_id, incidents, descriptions, remediation "+
+		"FROM crimes ORDER BY $1 DESC LIMIT $2",
+		orderBy, limit)
+
+	if err != nil {
+		return crimes, fmt.Errorf("error querying database for crimes"+
+			": %s", err.Error())
+	}
+
+	// Parse
+	for rows.Next() {
+		crime, err := NewCrime(rows)
+		if err != nil {
+			return crimes, fmt.Errorf("error parsing crime row: %s",
+				err.Error())
+		}
+
+		crimes = append(crimes, crime)
+	}
+
+	// Success
+	return crimes, nil
 }

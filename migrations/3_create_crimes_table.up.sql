@@ -9,7 +9,7 @@ CREATE TABLE crimes (
 	report_super_id INTEGER NOT NULL,
 	report_sub_id INTEGER NOT NULL,
 
-	geo_loc_id INTEGER REFERENCES geo_locs,
+	geo_loc_id INTEGER REFERENCES geo_locs NOT NULL,
 
 	incidents TEXT[] NOT NULL,
 	descriptions TEXT[] NOT NULL,

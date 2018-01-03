@@ -114,7 +114,8 @@ func main() {
 	}
 
 	// Start http server
-	err = http.Serve()
+	server := http.NewServer()
+	err = server.Serve()
 	if err != nil {
 		fmt.Printf("error starting http server: %s\n", err.Error())
 		os.Exit(1)

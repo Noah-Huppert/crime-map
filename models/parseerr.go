@@ -7,10 +7,14 @@ import (
 	"github.com/Noah-Huppert/crime-map/dstore"
 )
 
+// ParseErrorType is an alias for the string type, which is used to represent
+// ErrTypes
+type ParseErrorType string
+
 const (
-	// TypeBadRangeEnd signifies that a date range's end date occurred
-	// before a range's start date.
-	TypeBadRangeEnd string = "BAD_RANGE_END"
+	// TypeBadRangeEnd signifies that a Crime's date range's end date
+	// occurred before a range's start date.
+	TypeBadRangeEnd ParseErrorType = "BAD_RANGE_END"
 )
 
 // ParseError structs holds details about errors which occur while parsing
@@ -21,7 +25,7 @@ type ParseError struct {
 	// ID is the unique identifier of the parse error
 	ID int
 
-	// CrimeID holds the ID of the crime which was corrected
+	// CrimeID is ID of the Crime which the parse error refers to
 	CrimeID int
 
 	// Field holds the name of the crime field which was corrected
@@ -35,7 +39,7 @@ type ParseError struct {
 
 	// ErrType holds a computer identifiable value for the error that
 	// occurred
-	ErrType string
+	ErrType ParseErrorType
 }
 
 // String converts a ParseError into a string
