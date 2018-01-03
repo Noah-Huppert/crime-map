@@ -61,6 +61,13 @@ func (h GetCrimesHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Check offset < limit
+	if offset >= limit {
+		WriteErr(w, fmt.Errorf("'offset' query parameter must be "+
+			"less than 'limit' query parameter"))
+		return
+	}
+
 	// Query
 	crimes, err := models.QueryAllCrimes(offset, limit, orderBy)
 	if err != nil {
