@@ -2,6 +2,7 @@ CREATE TABLE crimes (
 	id SERIAL PRIMARY KEY,
 
 	report_id INTEGER REFERENCES reports NOT NULL,
+	page INTEGER NOT NULL,
 
 	date_reported TIMESTAMP WITH TIME ZONE NOT NULL,
 	date_occurred TSTZRANGE NOT NULL,

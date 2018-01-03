@@ -15,7 +15,7 @@ import (
 const DrexelUName string = "Drexel University"
 
 // headerDateRangeExpr is the regexp used to match a report header's first line
-var headerDateRangeExpr *regexp.Regexp = regexp.MustCompile("^From [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4} to [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}\\.$")
+var headerDateRangeExpr *regexp.Regexp = regexp.MustCompile("^From ([A-Z][a-z]+) ([0-9]{1,2}), ([0-9]{4}) to ([A-Z][a-z]+) ([0-9]{1,2}), ([0-9]{4})\\.$")
 
 // dateExpr is the regexp used to match a date in the pdf report
 var dateExpr *regexp.Regexp = regexp.MustCompile("^([0-9]{2})\\/([0-9]{2})\\/([0-9]{2}) - [A-Z]+ at ([0-9]{2}):([0-9]{2})$")
@@ -27,6 +27,10 @@ var dateRangeExpr *regexp.Regexp = regexp.MustCompile("^(.*[0-9]) - ([0-9].*)$")
 // of the header
 var footerPageNumExpr *regexp.Regexp = regexp.MustCompile("^[0-9]+$")
 
+// monthAbbrvs holds valid month abbreviations
+var monthAbbrvs []string = []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+
 // Field labels
 const fieldLabelReported string = "Date Reported:"
 const fieldLabelIncidents string = "Incident(s):"
@@ -37,21 +41,51 @@ const fieldLabelCrimeCount string = "Incident(s) Listed."
 // DrexelParser implements the Parser interface for Drexel University Clery
 // crime logs
 type DrexelParser struct {
+	// geoCache is used to cache GeoLoc queryies to the database
 	geoCache *geo.GeoCache
+
+	// parsed indicates if a report has been parsed yet
+	parsed bool
+
+	// crimes holds the Crimes which were parsed from a report, empty if
+	// parsed == false
+	crimes []models.Crime
+
+	// startRange holds the start of the time range which the report covers
+	startRange time.Time
+
+	// endRange holds the end of the time range which the report covers
+	endRange time.Time
 }
 
 // NewDrexelParser creates a new DrexelParser instance
 func NewDrexelParser(geoCache *geo.GeoCache) *DrexelParser {
 	return &DrexelParser{
 		geoCache: geoCache,
+		parsed:   false,
+		crimes:   []models.Crime{},
 	}
+}
+
+// Range implements the Range method for Parser
+func (p DrexelParser) Range() (*time.Time, *time.Time, error) {
+	// If not parsed
+	if !p.parsed {
+		return nil, nil, ErrReportNotParsed
+	}
+
+	// If parsed
+	return &p.startRange, &p.endRange, nil
 }
 
 // Parse interprets a pdf's text fields into Crime structs. For the style of
 // report Drexel University releases.
-func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
-	// crimes holds all parsed Crimes
-	crimes := []models.Crime{}
+func (p *DrexelParser) Parse(fields []string) ([]models.Crime, error) {
+	// Check if already parsed
+	if p.parsed {
+		// Return results
+		return p.crimes, ErrReportParsed
+	}
 
 	// c holds the Crime struct currently being parsed
 	var c models.Crime
@@ -62,6 +96,10 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 	// consume indicates how many fields the parser should consume, if
 	// multiple fields need to be consumed in a row
 	var consume int
+
+	// haveConsumedHeaderDate indicates that the header date range has
+	// already been parsed
+	var haveConsumedHeaderDate bool
 
 	// consumeGlob1 indicates if the date reported, location, report ID,
 	// and incidents field values come after the skipping is done
@@ -81,6 +119,9 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 	// coming up next
 	var consumeCrimeCount bool
 
+	// pageNum holds the current page number
+	pageNum := 0
+
 	// Loop through fields
 	for _, field := range fields {
 		// Check if we are skipping fields
@@ -90,8 +131,46 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 		}
 
 		// Check if first line of header
-		if headerDateRangeExpr.MatchString(field) {
+		if matches := headerDateRangeExpr.FindStringSubmatch(field); matches != nil {
+			// Header
+			pageNum += 1
 			skip = 3
+
+			// If already parsed
+			if haveConsumedHeaderDate {
+				continue
+			}
+
+			// Convert start date
+			startMonthStr := matches[1]
+			startDateStr := matches[2]
+			startYearStr := matches[3]
+
+			startRange, err := p.parseHeaderDate(startMonthStr,
+				startDateStr, startYearStr)
+			if err != nil {
+				return p.crimes, fmt.Errorf("error converting "+
+					"start header date to time.Time: %s",
+					err.Error())
+			}
+			p.startRange = *startRange
+
+			// Convert end date
+			endMonthStr := matches[4]
+			endDateStr := matches[5]
+			endYearStr := matches[6]
+
+			endRange, err := p.parseHeaderDate(endMonthStr,
+				endDateStr, endYearStr)
+			if err != nil {
+				return p.crimes, fmt.Errorf("error converting "+
+					"end header date to time.Time: %s",
+					err.Error())
+			}
+			p.endRange = *endRange
+
+			// Mark as parsed and skip fields
+			haveConsumedHeaderDate = true
 		} else if footerPageNumExpr.MatchString(field) { // Check if
 			// first line of footer
 			skip = 5
@@ -100,11 +179,12 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 			if consume == 4 {
 				d, err := parseDate(field)
 				if err != nil {
-					return crimes, fmt.Errorf("error parsing"+
+					return p.crimes, fmt.Errorf("error parsing"+
 						" reported at field: %s",
 						err.Error())
 				}
 
+				c.Page = pageNum
 				c.DateReported = *d
 				consume--
 			} else if consume == 3 { // If consuming location field
@@ -114,7 +194,7 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 				loc, err := p.geoCache.InsertIfNew(field)
 
 				if err != nil {
-					return crimes, fmt.Errorf("error "+
+					return p.crimes, fmt.Errorf("error "+
 						"getting cached GeoLoc: %s",
 						err.Error())
 				}
@@ -129,7 +209,7 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 
 				// Check correct number of parts
 				if len(parts) != 2 {
-					return crimes, fmt.Errorf("report ID "+
+					return p.crimes, fmt.Errorf("report ID "+
 						"field has incorrect number of"+
 						" parts, field: %s, parts: %d, "+
 						" expected parts: 2",
@@ -139,7 +219,7 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 				// Parse both ids
 				id, err := strconv.ParseUint(parts[0], 10, 64)
 				if err != nil {
-					return crimes, fmt.Errorf("error parsing "+
+					return p.crimes, fmt.Errorf("error parsing "+
 						"report super ID into uint: %s",
 						err.Error())
 				}
@@ -147,7 +227,7 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 
 				id, err = strconv.ParseUint(parts[1], 10, 64)
 				if err != nil {
-					return crimes, fmt.Errorf("error parsing "+
+					return p.crimes, fmt.Errorf("error parsing "+
 						"report Id into uint: %s",
 						err.Error())
 				}
@@ -169,7 +249,7 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 
 			// Check correct number of dates
 			if len(matches) != 3 {
-				return crimes, fmt.Errorf("error parsing date "+
+				return p.crimes, fmt.Errorf("error parsing date "+
 					"occurred, incorrect number of dates, "+
 					"field: %s, expected 2, got: %d",
 					field, len(matches)-1)
@@ -178,14 +258,14 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 			// Parse dates
 			start, err := parseDate(matches[1])
 			if err != nil {
-				return crimes, fmt.Errorf("error parsing occurred"+
+				return p.crimes, fmt.Errorf("error parsing occurred"+
 					" start date, field: %s, err: %s",
 					field, err.Error())
 			}
 
 			end, err := parseDate(matches[2])
 			if err != nil {
-				return crimes, fmt.Errorf("error parsing occurred"+
+				return p.crimes, fmt.Errorf("error parsing occurred"+
 					" end date, field: %s, err: %s",
 					field, err.Error())
 			}
@@ -199,7 +279,7 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 				// Check again
 				if start.After(fixedEnd) {
 					// We don't know how to fix, error
-					return crimes, fmt.Errorf("error "+
+					return p.crimes, fmt.Errorf("error "+
 						"parsing occurred date, start "+
 						"date is before end date, "+
 						"after correction, field: %s",
@@ -245,7 +325,7 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 			consumeFix = false
 
 			// And add crime to list
-			crimes = append(crimes, c)
+			p.crimes = append(p.crimes, c)
 			c = models.Crime{}
 		} else if field == fieldLabelReported { // Check if beginning
 			// of glob 1
@@ -266,26 +346,29 @@ func (p DrexelParser) Parse(fields []string) ([]models.Crime, error) {
 		} else if consumeCrimeCount { // Check if consuming crime count
 			count, err := strconv.Atoi(field[1:])
 			if err != nil {
-				return crimes, fmt.Errorf("error parsing number"+
+				return p.crimes, fmt.Errorf("error parsing number"+
 					" of listed crimes: %s", err.Error())
 			}
 
 			consumeCrimeCount = false
 
 			// Check count matches
-			if len(crimes) != count {
-				return crimes, fmt.Errorf("number of listed "+
+			if len(p.crimes) != count {
+				return p.crimes, fmt.Errorf("number of listed "+
 					"crimes and number of crimes parsed "+
 					"does not match: listed: %d, parsed: %d",
 					count,
-					len(crimes))
+					len(p.crimes))
 			}
 		} else {
-			fmt.Printf("UNKNOWN>>%s\n", field)
+			return p.crimes, fmt.Errorf("error parsing field, "+
+				"unknown value: %s", field)
 		}
 	}
 
-	return crimes, nil
+	// Success
+	p.parsed = true
+	return p.crimes, nil
 
 }
 
@@ -333,4 +416,49 @@ func parseDate(field string) (*time.Time, error) {
 		0, 0, time.UTC)
 
 	return &d, nil
+}
+
+// parseHeaderDate parses a time.Time from a report header. A Date will be
+// returned. Along with an error if one occurs. Nil on success.
+func (p DrexelParser) parseHeaderDate(monthStr string, dateStr string, yearStr string) (*time.Time, error) {
+	// Parse month
+	month, err := p.parseMonthAbbrv(monthStr)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing month "+
+			"abbreviation into month number: %s", err.Error())
+	}
+
+	// Parse date
+	date, err := strconv.ParseUint(dateStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing date: %s",
+			err.Error())
+	}
+
+	// Parse year
+	year, err := strconv.ParseUint(yearStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing year: %s",
+			err.Error())
+	}
+
+	// Success
+	t := time.Date(int(year), time.Month(month), int(date), 0, 0, 0, 0,
+		time.UTC)
+	return &t, nil
+}
+
+// parseMonthAbbrv extracts and returns the month number from a 3 character
+// abbreviation. An error is returned if one occurs, nil on success.
+func (p DrexelParser) parseMonthAbbrv(abbrv string) (uint, error) {
+	// Linear search valid abbreviations
+	for i, val := range monthAbbrvs {
+		if val == abbrv {
+			return uint(i + 1), nil
+		}
+	}
+
+	// If none found
+	return 0, fmt.Errorf("error parsing month abbreviation, unknown value"+
+		": %s", abbrv)
 }

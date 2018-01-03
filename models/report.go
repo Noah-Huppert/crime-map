@@ -8,6 +8,30 @@ import (
 	"github.com/Noah-Huppert/crime-map/dstore"
 )
 
+// UniversityType is a string type alias, used to represent the valid
+// university's a report can be published from.
+type UniversityType string
+
+const (
+	// UniversityDrexel indicates that a report was published by Drexel
+	UniversityDrexel UniversityType = "Drexel University"
+
+	// UniversityErr indicates that a report was provided with an invalid
+	// value
+	UniversityErr UniversityType = "Err"
+)
+
+// NewUniversityType constructs a new valid UniversityType from a raw string.
+// An error is returned if one occurs, or nil on success.
+func NewUniversityType(raw string) (UniversityType, error) {
+	if raw == string(UniversityDrexel) {
+		return UniversityDrexel, nil
+	} else {
+		return UniversityErr, fmt.Errorf("error creating UniversityType"+
+			" from value, invalid: %s", raw)
+	}
+}
+
 // Report holds information about documents parsed by crime-map to extract
 // Crime models. These documents are typically published as an obligation to
 // the Clery Act. And hold multiple individual crime reports.
@@ -17,7 +41,7 @@ type Report struct {
 
 	// University indicates which institution published the crime report
 	// document
-	University string
+	University UniversityType
 
 	// RangeStartDate indicates the start of the date range crimes were reported
 	// for
@@ -29,6 +53,16 @@ type Report struct {
 
 	// Pages holds the number of pages the document had
 	Pages uint
+}
+
+// NewReport will create a new Report model.
+func NewReport(univ UniversityType, start time.Time, end time.Time, pages uint) *Report {
+	return &Report{
+		University:     univ,
+		RangeStartDate: start,
+		RangeEndDate:   end,
+		Pages:          pages,
+	}
 }
 
 // String encodes the Report into string form
@@ -52,8 +86,8 @@ func (r *Report) Query() error {
 	}
 
 	// Query
-	row := db.QueryRow("SELECT id FROM reports WHERE university = $1 AND "+
-		"range = tstzrange($2, $3, '()') AND pages = $4",
+	row := db.QueryRow("SELECT id FROM reports WHERE university=$1 AND "+
+		"range=tstzrange($2, $3, '()') AND pages=$4",
 		r.University, r.RangeStartDate, r.RangeEndDate, r.Pages)
 
 	// Get ID

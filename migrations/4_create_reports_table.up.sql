@@ -1,7 +1,7 @@
 CREATE TABLE reports (
 	id SERIAL PRIMARY KEY,
 
-	university TEXT NOT NULL,
+	university UNIVERSITY_T NOT NULL,
 	range TSTZRANGE NOT NULL,
 	pages INTEGER NOT NULL
 )

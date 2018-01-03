@@ -51,6 +51,9 @@ type Crime struct {
 	// from
 	ReportID int
 
+	// Page indicates which page of the report a crime was reported on
+	Page int
+
 	// DateReported records when the criminal activity was disclosed to the
 	// police
 	DateReported time.Time
@@ -96,9 +99,9 @@ type Crime struct {
 }
 
 // NewCrime creates a new Crime model from a database query sql.Rows
-// result set. This query should select the id, university, date_reported,
-// date_occurred, report_super_id, report_sub_id, geo_loc_id, incidents,
-// descriptions, and remediations fields.
+// result set. This query should select the id, report_id, page, university,
+// date_reported, date_occurred, report_super_id, report_sub_id, geo_loc_id,
+// incidents, descriptions, and remediations fields.
 //
 // An Crime instance and error is returned. Nil on success.
 func NewCrime(rows *sql.Rows) (*Crime, error) {
@@ -107,9 +110,10 @@ func NewCrime(rows *sql.Rows) (*Crime, error) {
 	// Parse
 	// TODO: Figure out how to parse date range var d
 	var d interface{}
-	if err := rows.Scan(&crime.ID, &crime.ReportID, &crime.DateReported,
-		&d, &crime.ReportSuperID, &crime.ReportSubID, &crime.GeoLocID,
-		&crime.Incidents, &crime.Descriptions, &crime.Remediation); err != nil {
+	if err := rows.Scan(&crime.ID, &crime.ReportID, &crime.Page,
+		&crime.DateReported, &d, &crime.ReportSuperID,
+		&crime.ReportSubID, &crime.GeoLocID, &crime.Incidents,
+		&crime.Descriptions, &crime.Remediation); err != nil {
 		return crime, fmt.Errorf("error parsing crime values from row"+
 			": %s", err.Error())
 	}
@@ -120,6 +124,7 @@ func NewCrime(rows *sql.Rows) (*Crime, error) {
 
 func (c Crime) String() string {
 	return fmt.Sprintf("ReportID: %d\n"+
+		"Page: %d\n"+
 		"Reported: %s\n"+
 		"Occurred Start: %s\n"+
 		"Occurred End: %s\n"+
@@ -130,6 +135,7 @@ func (c Crime) String() string {
 		"Remediation: %s\n"+
 		"Parse Errors: %s",
 		c.ReportID,
+		c.Page,
 		c.DateReported,
 		c.DateOccurredStart,
 		c.DateOccurredEnd,
@@ -154,10 +160,10 @@ func (c *Crime) Query() error {
 
 	// Query
 	row := db.QueryRow("SELECT id FROM crimes WHERE report_id=$1 AND "+
-		"date_reported=$2 AND date_occurred=tstzrange($3, $4, '()') "+
-		"AND report_super_id=$5 AND report_sub_id=$6 AND "+
-		"incidents=$7 AND descriptions=$8 AND "+
-		"remediation=$9", c.ReportID, c.DateReported,
+		"page=$2 AND date_reported=$3 AND date_occurred=tstzrange($4,"+
+		" $5, '()') AND report_super_id=$6 AND report_sub_id=$7 AND "+
+		"incidents=$8 AND descriptions=$9 AND "+
+		"remediation=$10", c.ReportID, c.Page, c.DateReported,
 		c.DateOccurredStart, c.DateOccurredEnd, c.ReportSuperID,
 		c.ReportSubID, c.Incidents, c.Descriptions,
 		c.Remediation)
@@ -189,11 +195,11 @@ func (c *Crime) Insert() error {
 	}
 
 	// Insert
-	row := db.QueryRow("INSERT INTO crimes (report_id, date_reported, "+
+	row := db.QueryRow("INSERT INTO crimes (report_id, page, date_reported, "+
 		"date_occurred, report_super_id, report_sub_id, geo_loc_id, "+
-		"incidents, descriptions, remediation) VALUES ($1, $2, "+
-		"tstzrange($3, $4, '()'), $5, $6, $7, $8, $9, $10) RETURNING id",
-		c.ReportID, c.DateReported, c.DateOccurredStart,
+		"incidents, descriptions, remediation) VALUES ($1, $2, $3, "+
+		"tstzrange($4, $5, '()'), $6, $7, $8, $9, $10, $11) RETURNING id",
+		c.ReportID, c.Page, c.DateReported, c.DateOccurredStart,
 		c.DateOccurredEnd, c.ReportSuperID, c.ReportSubID, c.GeoLocID,
 		c.Incidents, c.Descriptions, c.Remediation)
 
@@ -237,7 +243,7 @@ func (c *Crime) InsertIfNew() error {
 // along with an error. Which is nil on success.
 //
 // Retrieves all crime columns.
-func QueryAllCrimes(limit uint, orderBy OrderByType) ([]*Crime, error) {
+func QueryAllCrimes(offset uint, limit uint, orderBy OrderByType) ([]*Crime, error) {
 	crimes := []*Crime{}
 
 	// Check orderBy var
@@ -253,11 +259,11 @@ func QueryAllCrimes(limit uint, orderBy OrderByType) ([]*Crime, error) {
 	}
 
 	// Query
-	rows, err := db.Query("SELECT id, report_id, date_reported, "+
+	rows, err := db.Query("SELECT id, report_id, page, date_reported, "+
 		"date_occurred, report_super_id, report_sub_id, "+
 		"geo_loc_id, incidents, descriptions, remediation "+
-		"FROM crimes ORDER BY $1 DESC LIMIT $2",
-		orderBy, limit)
+		"FROM crimes ORDER BY $1 DESC OFFSET $2 LIMIT $3",
+		orderBy, offset, limit)
 
 	if err != nil {
 		return crimes, fmt.Errorf("error querying database for crimes"+

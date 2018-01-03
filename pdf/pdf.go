@@ -7,6 +7,7 @@ import (
 	pdfcore "github.com/unidoc/unidoc/pdf/core"
 	pdf "github.com/unidoc/unidoc/pdf/model"
 	"os"
+	"strings"
 )
 
 // Pdf holds data about a pdf file
@@ -21,6 +22,9 @@ type Pdf struct {
 	// fields holds all the text fields present in the pdf, in the order
 	// they occurred
 	fields []string
+
+	// pages holds the number of pages a Pdf contains
+	pages uint
 }
 
 // NewPdf creates a new Pdf struct with the given path
@@ -30,6 +34,15 @@ func NewPdf(path string) *Pdf {
 		parsed: false,
 		fields: []string{},
 	}
+}
+
+// String converts a Pdf struct into a string to view
+func (p Pdf) String() string {
+	return fmt.Sprintf("path: %s\n"+
+		"parsed: %t\n"+
+		"fields: %s\n"+
+		"pages: %d",
+		p.path, p.parsed, strings.Join(p.fields, ", "), p.pages)
 }
 
 // IsParsed indicates if the specified pdf file has been processed yet
@@ -43,9 +56,15 @@ func (p Pdf) Feilds() ([]string, bool) {
 	return p.fields, p.IsParsed()
 }
 
+// Pages returns the number of pages the Pdf contains. Along with a boolean
+// which indicates if the pdf file has been parsed yet.
+func (p Pdf) Pages() (uint, bool) {
+	return p.pages, p.IsParsed()
+}
+
 // Parse opens the pdf file and extracts all text fields present. These fields
 // are returned. Along with an error if one occurs, or nil on success.
-func (p Pdf) Parse() ([]string, error) {
+func (p *Pdf) Parse() ([]string, error) {
 	// If already parsed, error
 	if p.IsParsed() {
 		return p.fields, errors.New("pdf file already parsed")
@@ -94,6 +113,13 @@ func (p Pdf) Parse() ([]string, error) {
 		return p.fields, fmt.Errorf("error getting number of pages in pdf: %s",
 			err.Error())
 	}
+
+	// Check we can cast numPages into uint
+	if numPages < 0 {
+		return p.fields, fmt.Errorf("error parsing number of pages "+
+			" into uint, below 0, val: %d", numPages)
+	}
+	p.pages = uint(numPages)
 
 	// Loop through pages
 	for pageNum := 1; pageNum <= numPages; pageNum++ {
