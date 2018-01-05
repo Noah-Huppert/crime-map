@@ -24,6 +24,7 @@ func NewServer() *Server {
 		router: mux.NewRouter(),
 		Routes: []Registerable{
 			GetCrimesHandler{},
+			ListReportsHandler{},
 		},
 	}
 }

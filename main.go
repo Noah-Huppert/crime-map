@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Noah-Huppert/crime-map/geo"
 	"github.com/Noah-Huppert/crime-map/http"
@@ -31,7 +32,7 @@ func main() {
 
 	// Parse crimes
 	fmt.Println("parsing report")
-	r := parsers.NewReport(file, geoCache)
+	r := parsers.NewReader(file, geoCache)
 
 	crimes, err := r.Parse()
 	if err != nil {
@@ -42,9 +43,11 @@ func main() {
 
 	// Save crimes
 	fmt.Println("saving crimes")
-	for _, crime := range crimes {
+	for i, crime := range crimes {
 		if err = crime.InsertIfNew(); err != nil {
-			fmt.Printf("error saving crime, crime: %s, err: %s\n",
+			fmt.Printf("error saving crime, i: %d, crime: %s, "+
+				"err: %s\n",
+				i,
 				crime,
 				err.Error())
 			os.Exit(1)
@@ -67,7 +70,7 @@ func main() {
 		}
 	}
 
-	// Locate
+	// Find unlocated GeoLocs
 	fmt.Println("querying for unlocated GeoLoc models")
 	locater := geo.NewLocater()
 	unlocated, err := models.QueryUnlocatedGeoLocs()
@@ -79,37 +82,32 @@ func main() {
 		return
 	}
 
+	// Locate
 	fmt.Println("locating unlocated GeoLoc models")
-	errs := make(chan error)
-	locs := make(chan *models.GeoLoc)
-	currentlyLocating := len(unlocated)
+	errs := geo.LocateAll(ctx, locater, unlocated)
 
-	// Kick off locator jobs
-	for _, loc := range unlocated {
-		// Locate
-		locater.LocateAsync(ctx, errs, locs, loc)
+	if len(errs) != 0 {
+		// Combine errors into string
+		errsArr := []string{}
+		for _, err := range errs {
+			errsArr = append(errsArr, err.Error())
+		}
+
+		// Print errors
+		fmt.Printf("error locating GeoLoc models: %s",
+			strings.Join(errsArr, ", "))
+		os.Exit(1)
+		return
 	}
 
-	for currentlyLocating > 0 {
-		select {
-		case err = <-errs:
-			// If error
-			currentlyLocating -= 1
-			fmt.Printf("error locating model: %s", err.Error())
+	// Save locations
+	for _, loc := range unlocated {
+		if err = loc.Update(); err != nil {
+			fmt.Printf("error updating GeoLoc model, loc: %s, "+
+				"err: %s\n",
+				loc, err.Error())
 			os.Exit(1)
 			return
-		case loc := <-locs:
-			// If success
-			currentlyLocating -= 1
-
-			if err = loc.Update(); err != nil {
-				fmt.Printf("error updating GeoLoc model, loc: %s, "+
-					"err: %s\n",
-					loc, err.Error())
-				os.Exit(1)
-				return
-			}
-
 		}
 	}
 
