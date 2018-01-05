@@ -281,6 +281,12 @@ func QueryAllCrimes(offset uint, limit uint, orderBy OrderByType) ([]*Crime, err
 		crimes = append(crimes, crime)
 	}
 
+	// Close query
+	if err = rows.Close(); err != nil {
+		return crimes, fmt.Errorf("error closing crimes query: %s",
+			err.Error())
+	}
+
 	// Success
 	return crimes, nil
 }

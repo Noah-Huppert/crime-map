@@ -43,9 +43,11 @@ func main() {
 
 	// Save crimes
 	fmt.Println("saving crimes")
-	for _, crime := range crimes {
+	for i, crime := range crimes {
 		if err = crime.InsertIfNew(); err != nil {
-			fmt.Printf("error saving crime, crime: %s, err: %s\n",
+			fmt.Printf("error saving crime, i: %d, crime: %s, "+
+				"err: %s\n",
+				i,
 				crime,
 				err.Error())
 			os.Exit(1)

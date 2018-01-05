@@ -1,9 +1,8 @@
 package parsers
 
 import (
-	"errors"
 	"fmt"
-	"strings"
+	"time"
 
 	"github.com/Noah-Huppert/crime-map/geo"
 	"github.com/Noah-Huppert/crime-map/models"
@@ -53,7 +52,7 @@ func (r Reader) Crimes() ([]models.Crime, bool) {
 func (r Reader) Parse() ([]models.Crime, error) {
 	// Check if parsed
 	if r.IsParsed() {
-		return r.crimes, errors.New("report has already been parsed")
+		return r.crimes, ErrReportParsed
 	}
 
 	// Get pdf text fields
@@ -63,70 +62,70 @@ func (r Reader) Parse() ([]models.Crime, error) {
 	}
 
 	// Figure out which university published report
-	univ, err := r.determineUniversity(fields)
+	univ, err := determineUniversity(fields)
 	if err != nil {
 		return r.crimes, fmt.Errorf("error determining university "+
 			"from report fields: %s", err.Error())
 	}
 
-	// Parse into crimes
-	drexelParser := NewDrexelParser(r.geoCache)
+	// Use parser based on university
+	var parser Parser
 
-	crimes, err := drexelParser.Parse(fields)
+	if univ == models.UniversityDrexel {
+		parser = NewDrexelParser(r.geoCache, fields)
+	} else {
+		return r.crimes, fmt.Errorf("error determining parser based on"+
+			" university, no parser, university: %s", univ)
+	}
+
+	// Save Report model based on info in pdf
+	report, err := r.saveReport(parser, univ)
+	if err != nil {
+		return r.crimes, fmt.Errorf("error saving report model: %s",
+			err.Error())
+	}
+
+	// Parse crimes from fields
+	crimes, err := parser.Parse(report.ID)
 	if err != nil {
 		return r.crimes, fmt.Errorf("error parsing report: %s",
 			err.Error())
 	}
+	r.crimes = crimes
 
+	// All done
+	return r.crimes, nil
+}
+
+// saveReport retrieves information about the report being parsed, and
+// retrieves / inserts a report with the information. An error is returned if
+// one occurs, nil on success.
+func (r Reader) saveReport(parser Parser, univ models.UniversityType) (*models.Report, error) {
 	// Get date range report covers
-	startRange, endRange, err := drexelParser.Range()
+	startRange, endRange, err := parser.Range()
 	if err != nil {
-		return r.crimes, fmt.Errorf("error retrieving report range: %s",
+		return nil, fmt.Errorf("error retrieving report range: %s",
 			err.Error())
 	}
 
 	// Get number of pages in report
 	pages, parsed := r.pdf.Pages()
 	if !parsed {
-		return r.crimes, fmt.Errorf("error retrieving number of report"+
+		return nil, fmt.Errorf("error retrieving number of report"+
 			" pages: %s", ErrReportNotParsed)
 	}
 
 	// Make report
-	report := models.NewReport(univ, *startRange, *endRange, pages)
+	now := time.Now()
+	report := models.NewReport(univ, &now, startRange, endRange,
+		pages)
 
 	// Save report
 	if err = report.InsertIfNew(); err != nil {
-		return crimes, fmt.Errorf("error saving Report model: %s",
+		return nil, fmt.Errorf("error saving Report model: %s",
 			err.Error())
 	}
 
-	// Set models.Crime.ReportID fk in crimes
-	for i, _ := range crimes {
-		crimes[i].ReportID = report.ID
-	}
-
-	// All done
-	return crimes, nil
-}
-
-// determineUniversity figures out which University a crime report was
-// published from. By reading in the text fields present in a report. And
-// searching for the first occurrence of a university name.
-//
-// A models.UniversityType is returned along with an error. Which will be nil
-// on success.
-func (r Reader) determineUniversity(fields []string) (models.UniversityType, error) {
-	// Attempt to find univ name in fields
-	for _, field := range fields {
-		// Check
-		if strings.Contains(field, string(models.UniversityDrexel)) {
-			// Success
-			return models.UniversityDrexel, nil
-		}
-	}
-
-	// If none found
-	return models.UniversityErr, errors.New("error determining university," +
-		" no field with university name found")
+	// Success
+	return report, nil
 }

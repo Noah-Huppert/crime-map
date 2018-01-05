@@ -52,7 +52,7 @@ func (p Pdf) IsParsed() bool {
 
 // Fields returns the fields the Pdf contains. Along with a boolean, which
 // indicates if the pdf file has been parsed yet.
-func (p Pdf) Feilds() ([]string, bool) {
+func (p Pdf) Fields() ([]string, bool) {
 	return p.fields, p.IsParsed()
 }
 
