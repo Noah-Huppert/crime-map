@@ -6,5 +6,6 @@ CREATE TABLE reports (
 
 	university UNIVERSITY_T NOT NULL,
 	range TSTZRANGE NOT NULL,
-	pages INTEGER NOT NULL
+	pages INTEGER NOT NULL,
+	crimes_count INTEGER NOT NULL
 )
