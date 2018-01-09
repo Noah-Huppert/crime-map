@@ -35,7 +35,9 @@ func main() {
 	r := parsers.NewReader(file, geoCache)
 
 	crimes, err := r.Parse()
-	if err != nil {
+	if err == parsers.ErrReportParsed {
+		fmt.Printf("skipping report, already parsed\n")
+	} else if err != nil {
 		fmt.Printf("error parsing report: %s\n", err.Error())
 		os.Exit(1)
 		return

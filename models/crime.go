@@ -3,10 +3,12 @@ package models
 import (
 	"database/sql"
 	"fmt"
-	"github.com/Noah-Huppert/crime-map/dstore"
 	"github.com/lib/pq"
 	"strings"
 	"time"
+
+	"github.com/Noah-Huppert/crime-map/date"
+	"github.com/Noah-Huppert/crime-map/dstore"
 )
 
 // OrderByType is the type alias used to represent the field used to order rows
@@ -60,11 +62,11 @@ type Crime struct {
 
 	// DateOccurredStart records when the criminal activity started taking
 	// place
-	DateOccurredStart time.Time
+	DateOccurredStart *time.Time
 
 	// DateOccurredEnd records when the criminal activity stopped taking
 	// place
-	DateOccurredEnd time.Time
+	DateOccurredEnd *time.Time
 
 	// ReportSuperID is the first portion of police report ID associated
 	// with the reported crime.
@@ -108,15 +110,24 @@ func NewCrime(rows *sql.Rows) (*Crime, error) {
 	crime := &Crime{}
 
 	// Parse
-	// TODO: Figure out how to parse date range var d
-	var d interface{}
+	var rangeStr string
+
 	if err := rows.Scan(&crime.ID, &crime.ReportID, &crime.Page,
-		&crime.DateReported, &d, &crime.ReportSuperID,
+		&crime.DateReported, &rangeStr, &crime.ReportSuperID,
 		&crime.ReportSubID, &crime.GeoLocID, &crime.Incidents,
 		&crime.Descriptions, &crime.Remediation); err != nil {
-		return crime, fmt.Errorf("error parsing crime values from row"+
+		return nil, fmt.Errorf("error parsing crime values from row"+
 			": %s", err.Error())
 	}
+
+	// Parse date range
+	startRange, endRange, err := date.NewRangeFromStr(rangeStr)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing date range into "+
+			"time.Times, err: %s", err.Error())
+	}
+	crime.DateOccurredStart = startRange
+	crime.DateOccurredEnd = endRange
 
 	// Success
 	return crime, nil

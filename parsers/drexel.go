@@ -324,8 +324,8 @@ func (p *DrexelParser) Parse(reportID int) ([]models.Crime, error) {
 			}
 
 			// Save
-			c.DateOccurredStart = *start
-			c.DateOccurredEnd = *end
+			c.DateOccurredStart = start
+			c.DateOccurredEnd = end
 
 			consumeDOccurred = false
 		} else if consumeDesc { // Check if consuming synopsis
@@ -347,6 +347,10 @@ func (p *DrexelParser) Parse(reportID int) ([]models.Crime, error) {
 			// And add crime to list
 			c.ReportID = reportID
 
+			if c.DateOccurredStart == nil {
+				p.logger.Printf("empty: %s\n", c)
+				// TODO: Figure out why some Crimes have "empty" date_occurred ranges
+			}
 			p.crimes = append(p.crimes, c)
 
 			c = models.Crime{}
