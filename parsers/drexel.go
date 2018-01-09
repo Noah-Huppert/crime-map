@@ -3,6 +3,8 @@ package parsers
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -39,9 +41,17 @@ const fieldLabelOccurred string = "Date and Time Occurred From - Occurred To:"
 const fieldLabelFix string = "Disposition:"
 const fieldLabelCrimeCount string = "Incident(s) Listed."
 
+// errNotHeaderDateRange indicates that the provided field was not a date range
+// present in the report header
+var errNotHeaderDateRange error = errors.New("provided field was not a header" +
+	" date range")
+
 // DrexelParser implements the Parser interface for Drexel University Clery
 // crime logs
 type DrexelParser struct {
+	// logger is used to output debug information
+	logger *log.Logger
+
 	// geoCache is used to cache GeoLoc queryies to the database
 	geoCache *geo.GeoCache
 
@@ -70,6 +80,7 @@ type DrexelParser struct {
 // NewDrexelParser creates a new DrexelParser instance
 func NewDrexelParser(geoCache *geo.GeoCache, fields []string) *DrexelParser {
 	return &DrexelParser{
+		logger:       log.New(os.Stdout, "parsers/drexel", 0),
 		fields:       fields,
 		geoCache:     geoCache,
 		parsedCrimes: false,
@@ -80,7 +91,7 @@ func NewDrexelParser(geoCache *geo.GeoCache, fields []string) *DrexelParser {
 
 // Range implements the Range method for Parser. It parses the fields far
 // enough to determine the date range the report covers
-func (p DrexelParser) Range() (*time.Time, *time.Time, error) {
+func (p *DrexelParser) Range() (*time.Time, *time.Time, error) {
 	// Check if already parsed range
 	if p.parsedRange {
 		// If so, return
@@ -90,7 +101,7 @@ func (p DrexelParser) Range() (*time.Time, *time.Time, error) {
 	// Loop through fields until we parse a header date range
 	for _, field := range p.fields {
 		// If parsed header date range
-		if newSkip, err := p.parseHeaderRange(field); newSkip != 0 {
+		if _, err := p.parseHeaderRange(field); err != errNotHeaderDateRange {
 			// If parse error
 			if err != nil {
 				return nil, nil, fmt.Errorf("error parsing "+
@@ -104,6 +115,19 @@ func (p DrexelParser) Range() (*time.Time, *time.Time, error) {
 
 	// If looped through all fields and not found, error
 	return nil, nil, errors.New("error finding header date range, not found")
+}
+
+// Count returns the number of crimes parsed in the report.
+func (p DrexelParser) Count() (uint, error) {
+	// Check if not parsed yet
+	if !p.parsedCrimes {
+		return 0, ErrReportNotParsed
+	}
+
+	// If parsed, return count
+	l := len(p.crimes)
+
+	return uint(l), nil
 }
 
 // Parse interprets a pdf's text fields into Crime structs. For the style of
@@ -155,15 +179,17 @@ func (p *DrexelParser) Parse(reportID int) ([]models.Crime, error) {
 		}
 
 		// Check if first line of header
-		if newSkip, err := p.parseHeaderRange(field); newSkip != 0 {
+		if newSkip, err := p.parseHeaderRange(field); err != errNotHeaderDateRange {
 			// Check if error occurred
 			if err != nil {
 				return p.crimes, fmt.Errorf("error parsing "+
 					"header date range: %s", err.Error())
 			}
 
-			// Set new skip value
-			skip = newSkip
+			// Set new skip value if not 0
+			if newSkip > 0 {
+				skip = newSkip
+			}
 		} else if footerPageNumExpr.MatchString(field) { // Check if
 			// first line of footer
 			skip = 5
@@ -488,24 +514,25 @@ func (p DrexelParser) parseMonthAbbrv(abbrv string) (uint, error) {
 // The number of fields to skip after parseRange is called is returned. If 0,
 // the existing skip variable should not be modified.
 //
-// This skip value can be used to determine if parseRange picked up a header
-// date range. If the skip value is not equal to 0, the provided field was a
-// header date range. Otherwise the provided field was not a header date range.
-//
-// Additionally an error is returned if one occurs, nil on success.
-func (p DrexelParser) parseHeaderRange(field string) (int, error) {
-	// Check if already parsed
-	if p.parsedRange {
-		// Exit
-		return 0, nil
-	}
+// Additionally an error is returned if one occurs, nil on success. The
+// errNotHeaderDateRange error will be returned if the provided field was not
+// in the header date range format.
+func (p *DrexelParser) parseHeaderRange(field string) (int, error) {
+	validSkip := 3
+	errSkip := -1
 
 	// Check if field is header date range
 	if matches := headerDateRangeExpr.FindStringSubmatch(field); matches != nil {
+		// Check if already parsed
+		if p.parsedRange {
+			// Exit
+			return validSkip, nil
+		}
+
 		// Convert start date
 		startRange, err := p.parseHeaderDate(matches, 0)
 		if err != nil {
-			return -1, fmt.Errorf("error converting start "+
+			return errSkip, fmt.Errorf("error converting start "+
 				"header date to time.Time: %s",
 				err.Error())
 		}
@@ -514,7 +541,7 @@ func (p DrexelParser) parseHeaderRange(field string) (int, error) {
 		// Convert end date
 		endRange, err := p.parseHeaderDate(matches, 1)
 		if err != nil {
-			return -1, fmt.Errorf("error converting end "+
+			return errSkip, fmt.Errorf("error converting end "+
 				"header date to time.Time: %s",
 				err.Error())
 		}
@@ -524,9 +551,9 @@ func (p DrexelParser) parseHeaderRange(field string) (int, error) {
 		p.parsedRange = true
 
 		// Mark as parsed and skip fields
-		return 3, nil
+		return validSkip, nil
 	}
 
 	// If not a header date range
-	return 0, nil
+	return 0, errNotHeaderDateRange
 }

@@ -5,6 +5,7 @@ CREATE TABLE reports (
 	parse_success BOOLEAN NOT NULL DEFAULT FALSE,
 
 	university UNIVERSITY_T NOT NULL,
-	range TSTZRANGE NOT NULL,
-	pages INTEGER NOT NULL
+	covers_range TSTZRANGE NOT NULL,
+	pages INTEGER NOT NULL,
+	crimes_count INTEGER NOT NULL
 )

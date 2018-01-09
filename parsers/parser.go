@@ -27,6 +27,10 @@ type Parser interface {
 	// The parse method is expected to be called before Range(). And an
 	// error will be returned if it has not been.
 	Range() (*time.Time, *time.Time, error)
+
+	// Count returns the number of Crime models parsed from a report. An
+	// error is returned if one occurs. Nil on success.
+	Count() (uint, error)
 }
 
 // determineUniversity figures out which University a crime report was

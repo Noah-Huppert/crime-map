@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Noah-Huppert/crime-map/date"
 	"github.com/Noah-Huppert/crime-map/dstore"
 )
 
@@ -59,6 +60,9 @@ type Report struct {
 
 	// Pages holds the number of pages the document had
 	Pages uint
+
+	// CrimesCount holds the number of crimes parsed from the report
+	CrimesCount uint
 }
 
 // NewReport will create a new Report model.
@@ -76,19 +80,29 @@ func NewReport(univ UniversityType, parsedOn *time.Time, start *time.Time,
 
 // NewReportFromRow creates a new Report model from a database row. This row
 // should be from a query which selects the id, parsed_on, parse_success,
-// university, range, and pages fields. Additionally an error is returned if
-// one occurs, nil on success.
+// university, covers_range, pages and crimes_count fields. Additionally an
+// error is returned if one occurs, nil on success.
 func NewReportFromRow(rows *sql.Rows) (*Report, error) {
 	// Scan
 	r := &Report{}
-	var dRange interface{}
+	var dRange string
+
 	err := rows.Scan(&r.ID, &r.ParsedOn, &r.ParseSuccess, &r.University,
-		&dRange, &r.Pages)
+		&dRange, &r.Pages, &r.CrimesCount)
 
 	if err != nil {
 		return nil, fmt.Errorf("error parsing Report from database row"+
 			": %s", err.Error())
 	}
+
+	// Do extra work to parse date range
+	startDate, endDate, err := date.NewRangeFromStr(dRange)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing parsed_on range to "+
+			"time.Time structs: %s", err.Error())
+	}
+	r.RangeStartDate = startDate
+	r.RangeEndDate = endDate
 
 	// Success
 	return r, nil
@@ -101,16 +115,18 @@ func (r Report) String() string {
 		"ParseSuccess: %t\n"+
 		"University: %s\n"+
 		"Range: [%s, %s]\n"+
-		"Pages: %d",
+		"Pages: %d\n"+
+		"CrimesCount: %d",
 		r.ID, r.ParsedOn, r.ParseSuccess, r.University,
-		r.RangeStartDate, r.RangeEndDate, r.Pages)
+		r.RangeStartDate, r.RangeEndDate, r.Pages, r.CrimesCount)
 }
 
 // Query attempts to find a Report with the same parse_success, university,
-// range, and pages field values. The parsed_on field is left out of the query.
+// covers_range, and pages field values. The parsed_on, parse_success, and
+// crimes_count fields are left out of the query.
 //
-// It populates the Report.ID field with the database row's ID. An error is
-// returned if one occurs, or nil on success.
+// It populates the Report.ID and Report.ParseSucces fields with the database
+// row. An error is returned if one occurs, or nil on success.
 func (r *Report) Query() error {
 	// Get db instance
 	db, err := dstore.NewDB()
@@ -120,13 +136,13 @@ func (r *Report) Query() error {
 	}
 
 	// Query
-	row := db.QueryRow("SELECT id FROM reports WHERE parse_success=$1 AND "+
-		"university=$2 AND range=tstzrange($3, $4, '()') AND pages=$5",
-		r.ParseSuccess, r.University, r.RangeStartDate, r.RangeEndDate,
+	row := db.QueryRow("SELECT id, parse_success FROM reports WHERE "+
+		"university=$1 AND covers_range=tstzrange($2, $3, '()') AND "+
+		"pages=$4", r.University, r.RangeStartDate, r.RangeEndDate,
 		r.Pages)
 
 	// Get ID
-	err = row.Scan(&r.ID)
+	err = row.Scan(&r.ID, &r.ParseSuccess)
 
 	// Check if no rows
 	if err == sql.ErrNoRows {
@@ -155,15 +171,42 @@ func (r *Report) Insert() error {
 
 	// Insert
 	row := db.QueryRow("INSERT INTO reports (parsed_on, parse_success, "+
-		"university, range, pages) VALUES ($1, $2, $3, "+
-		"tstzrange($4, $5, '()'), $6) RETURNING id",
+		"university, covers_range, pages, crimes_count) VALUES ($1, "+
+		"$2, $3, tstzrange($4, $5, '()'), $6, $7) RETURNING id",
 		r.ParsedOn, r.ParseSuccess, r.University, r.RangeStartDate,
-		r.RangeEndDate, r.Pages)
+		r.RangeEndDate, r.Pages, r.CrimesCount)
 
 	// Get ID
 	err = row.Scan(&r.ID)
 	if err != nil {
 		return fmt.Errorf("error inserting Report model: %s",
+			err.Error())
+	}
+
+	// Success
+	return nil
+}
+
+// UpdatePostParseFields updates the parse_success and crimes_count fields for
+// the database row with a matching Report.ID field.
+//
+// These 2 fields are updated after a report has been parsed. As their values
+// can only be know after all crimes have been extracted.
+func (r Report) UpdatePostParseFields() error {
+	// Get database instance
+	db, err := dstore.NewDB()
+	if err != nil {
+		return fmt.Errorf("error retrieving database instance: %s",
+			err.Error())
+	}
+
+	// Update
+	_, err = db.Exec("UPDATE reports SET parse_success=$1, "+
+		"crimes_count=$2 WHERE id=$3", r.ParseSuccess,
+		r.CrimesCount, r.ID)
+
+	if err != nil {
+		return fmt.Errorf("error running update query: %s",
 			err.Error())
 	}
 
@@ -210,7 +253,8 @@ func QueryAllReports() ([]*Report, error) {
 
 	// Query
 	rows, err := db.Query("SELECT id, parsed_on, parse_success, university" +
-		", range, pages FROM reports ORDER BY parsed_on DESC")
+		", covers_range, pages, crimes_count FROM reports ORDER BY " +
+		"parsed_on DESC")
 
 	// Parse
 	for rows.Next() {

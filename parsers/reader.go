@@ -49,7 +49,7 @@ func (r Reader) Crimes() ([]models.Crime, bool) {
 
 // Parse interprets a crime report file and returns the contained crimes.
 // Additionally an error will be returned, nil on success.
-func (r Reader) Parse() ([]models.Crime, error) {
+func (r *Reader) Parse() ([]models.Crime, error) {
 	// Check if parsed
 	if r.IsParsed() {
 		return r.crimes, ErrReportParsed
@@ -74,8 +74,8 @@ func (r Reader) Parse() ([]models.Crime, error) {
 	if univ == models.UniversityDrexel {
 		parser = NewDrexelParser(r.geoCache, fields)
 	} else {
-		return r.crimes, fmt.Errorf("error determining parser based on"+
-			" university, no parser, university: %s", univ)
+		return r.crimes, fmt.Errorf("no parser parser for university:"+
+			" %s", univ)
 	}
 
 	// Save Report model based on info in pdf
@@ -85,6 +85,11 @@ func (r Reader) Parse() ([]models.Crime, error) {
 			err.Error())
 	}
 
+	// Check if report has already been parsed
+	if report.ParseSuccess {
+		return r.crimes, ErrReportParsed
+	}
+
 	// Parse crimes from fields
 	crimes, err := parser.Parse(report.ID)
 	if err != nil {
@@ -92,6 +97,13 @@ func (r Reader) Parse() ([]models.Crime, error) {
 			err.Error())
 	}
 	r.crimes = crimes
+
+	// Save information about parsing process itself in Report model
+	err = r.updateReportPost(parser, report)
+	if err != nil {
+		return r.crimes, fmt.Errorf("error updating report model after"+
+			" parsing: %s", err.Error())
+	}
 
 	// All done
 	return r.crimes, nil
@@ -128,4 +140,29 @@ func (r Reader) saveReport(parser Parser, univ models.UniversityType) (*models.R
 
 	// Success
 	return report, nil
+}
+
+// updateReportPost sets the ParseSuccess and CrimesCount properties of the
+// Report model associated with the parsging job
+func (r Reader) updateReportPost(parser Parser, report *models.Report) error {
+	// Get number of crimes parsed
+	count, err := parser.Count()
+	if err != nil {
+		return fmt.Errorf("error getting number of reports parsed: %s",
+			err.Error())
+	}
+	report.CrimesCount = count
+
+	// Indicate report parsed successfully
+	report.ParseSuccess = true
+
+	// Save updates
+	err = report.UpdatePostParseFields()
+	if err != nil {
+		return fmt.Errorf("error saving post parse updates to report "+
+			"model: %s", err.Error())
+	}
+
+	// Success
+	return nil
 }

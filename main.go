@@ -83,7 +83,7 @@ func main() {
 	}
 
 	// Locate
-	fmt.Println("locating unlocated GeoLoc models")
+	fmt.Printf("locating %d unlocated GeoLoc models\n", len(unlocated))
 	errs := geo.LocateAll(ctx, locater, unlocated)
 
 	if len(errs) != 0 {
