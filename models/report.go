@@ -125,8 +125,8 @@ func (r Report) String() string {
 // covers_range, and pages field values. The parsed_on, parse_success, and
 // crimes_count fields are left out of the query.
 //
-// It populates the Report.ID field with the database row's ID. An error is
-// returned if one occurs, or nil on success.
+// It populates the Report.ID and Report.ParseSucces fields with the database
+// row. An error is returned if one occurs, or nil on success.
 func (r *Report) Query() error {
 	// Get db instance
 	db, err := dstore.NewDB()
@@ -136,12 +136,13 @@ func (r *Report) Query() error {
 	}
 
 	// Query
-	row := db.QueryRow("SELECT id FROM reports WHERE university=$1 AND "+
-		"covers_range=tstzrange($2, $3, '()') AND pages=$4",
-		r.University, r.RangeStartDate, r.RangeEndDate, r.Pages)
+	row := db.QueryRow("SELECT id, parse_success FROM reports WHERE "+
+		"university=$1 AND covers_range=tstzrange($2, $3, '()') AND "+
+		"pages=$4", r.University, r.RangeStartDate, r.RangeEndDate,
+		r.Pages)
 
 	// Get ID
-	err = row.Scan(&r.ID)
+	err = row.Scan(&r.ID, &r.ParseSuccess)
 
 	// Check if no rows
 	if err == sql.ErrNoRows {

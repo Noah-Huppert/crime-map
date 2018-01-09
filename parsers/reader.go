@@ -85,6 +85,11 @@ func (r *Reader) Parse() ([]models.Crime, error) {
 			err.Error())
 	}
 
+	// Check if report has already been parsed
+	if report.ParseSuccess {
+		return r.crimes, ErrReportParsed
+	}
+
 	// Parse crimes from fields
 	crimes, err := parser.Parse(report.ID)
 	if err != nil {
