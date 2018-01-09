@@ -45,9 +45,7 @@ func NewRangeFromStr(field string) (*time.Time, *time.Time, error) {
 // error is returned if one occurs.
 func NewTimeFromStr(str string) (*time.Time, error) {
 	// Attempt to parse
-	// TODO: Figure out how to properly parse date str
-	//       In format: "2017-10-14 00:00:00 +0000 UTC"
-	t, err := time.Parse(time.RFC3339, str)
+	t, err := time.Parse("2006-01-02 15:04:05-07", str)
 	if err != nil {
 		return nil, fmt.Errorf("error converting string into RFC3339 time: %s",
 			err.Error())

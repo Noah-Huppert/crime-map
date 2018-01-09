@@ -80,8 +80,8 @@ func NewReport(univ UniversityType, parsedOn *time.Time, start *time.Time,
 
 // NewReportFromRow creates a new Report model from a database row. This row
 // should be from a query which selects the id, parsed_on, parse_success,
-// university, range, pages and crimes_count fields. Additionally an error is
-// returned if one occurs, nil on success.
+// university, covers_range, pages and crimes_count fields. Additionally an
+// error is returned if one occurs, nil on success.
 func NewReportFromRow(rows *sql.Rows) (*Report, error) {
 	// Scan
 	r := &Report{}
@@ -104,9 +104,6 @@ func NewReportFromRow(rows *sql.Rows) (*Report, error) {
 	r.RangeStartDate = startDate
 	r.RangeEndDate = endDate
 
-	fmt.Printf("models/report#NewReportFromRow: '%s', %s, %s\n", dRange,
-		startDate, endDate)
-
 	// Success
 	return r, nil
 }
@@ -125,8 +122,8 @@ func (r Report) String() string {
 }
 
 // Query attempts to find a Report with the same parse_success, university,
-// range, and pages field values. The parsed_on and crimes_count fields are
-// left out of the query.
+// covers_range, and pages field values. The parsed_on, parse_success, and
+// crimes_count fields are left out of the query.
 //
 // It populates the Report.ID field with the database row's ID. An error is
 // returned if one occurs, or nil on success.
@@ -139,10 +136,9 @@ func (r *Report) Query() error {
 	}
 
 	// Query
-	row := db.QueryRow("SELECT id FROM reports WHERE parse_success=$1 AND "+
-		"university=$2 AND range=tstzrange($3, $4, '()') AND pages=$5",
-		r.ParseSuccess, r.University, r.RangeStartDate,
-		r.RangeEndDate, r.Pages)
+	row := db.QueryRow("SELECT id FROM reports WHERE university=$1 AND "+
+		"covers_range=tstzrange($2, $3, '()') AND pages=$4",
+		r.University, r.RangeStartDate, r.RangeEndDate, r.Pages)
 
 	// Get ID
 	err = row.Scan(&r.ID)
@@ -174,8 +170,8 @@ func (r *Report) Insert() error {
 
 	// Insert
 	row := db.QueryRow("INSERT INTO reports (parsed_on, parse_success, "+
-		"university, range, pages, crimes_count) VALUES ($1, $2, $3, "+
-		"tstzrange($4, $5, '()'), $6, $7) RETURNING id",
+		"university, covers_range, pages, crimes_count) VALUES ($1, "+
+		"$2, $3, tstzrange($4, $5, '()'), $6, $7) RETURNING id",
 		r.ParsedOn, r.ParseSuccess, r.University, r.RangeStartDate,
 		r.RangeEndDate, r.Pages, r.CrimesCount)
 
@@ -256,8 +252,8 @@ func QueryAllReports() ([]*Report, error) {
 
 	// Query
 	rows, err := db.Query("SELECT id, parsed_on, parse_success, university" +
-		", range, pages, crimes_count FROM reports ORDER BY parsed_on " +
-		"DESC")
+		", covers_range, pages, crimes_count FROM reports ORDER BY " +
+		"parsed_on DESC")
 
 	// Parse
 	for rows.Next() {

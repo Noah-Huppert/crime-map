@@ -126,7 +126,6 @@ func (r Reader) saveReport(parser Parser, univ models.UniversityType) (*models.R
 	now := time.Now()
 	report := models.NewReport(univ, &now, startRange, endRange,
 		pages)
-	fmt.Printf("parsers/reader#saveReport: (%s, %s)\n", startRange, endRange)
 
 	// Save report
 	if err = report.InsertIfNew(); err != nil {
