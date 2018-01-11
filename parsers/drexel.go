@@ -55,9 +55,6 @@ type DrexelParser struct {
 	// geoCache is used to cache GeoLoc queryies to the database
 	geoCache *geo.GeoCache
 
-	// fields holds the text fields from the pdf we are parsing
-	fields []string
-
 	// parsedCrimes indicates if a report's crime models have been parsed
 	// out yet
 	parsedCrimes bool
@@ -78,10 +75,9 @@ type DrexelParser struct {
 }
 
 // NewDrexelParser creates a new DrexelParser instance
-func NewDrexelParser(geoCache *geo.GeoCache, fields []string) *DrexelParser {
+func NewDrexelParser(geoCache *geo.GeoCache) *DrexelParser {
 	return &DrexelParser{
 		logger:       log.New(os.Stdout, "parsers/drexel", 0),
-		fields:       fields,
 		geoCache:     geoCache,
 		parsedCrimes: false,
 		parsedRange:  false,
@@ -91,7 +87,7 @@ func NewDrexelParser(geoCache *geo.GeoCache, fields []string) *DrexelParser {
 
 // Range implements the Range method for Parser. It parses the fields far
 // enough to determine the date range the report covers
-func (p *DrexelParser) Range() (*time.Time, *time.Time, error) {
+func (p *DrexelParser) Range(fields []string) (*time.Time, *time.Time, error) {
 	// Check if already parsed range
 	if p.parsedRange {
 		// If so, return
@@ -99,7 +95,7 @@ func (p *DrexelParser) Range() (*time.Time, *time.Time, error) {
 	}
 
 	// Loop through fields until we parse a header date range
-	for _, field := range p.fields {
+	for _, field := range fields {
 		// If parsed header date range
 		if _, err := p.parseHeaderRange(field); err != errNotHeaderDateRange {
 			// If parse error
@@ -132,7 +128,7 @@ func (p DrexelParser) Count() (uint, error) {
 
 // Parse interprets a pdf's text fields into Crime structs. For the style of
 // report Drexel University releases.
-func (p *DrexelParser) Parse(reportID int) ([]models.Crime, error) {
+func (p *DrexelParser) Parse(reportID int, fields []string) ([]models.Crime, error) {
 	// Check if already parsed
 	if p.parsedCrimes {
 		// Return results
@@ -171,7 +167,7 @@ func (p *DrexelParser) Parse(reportID int) ([]models.Crime, error) {
 	pageNum := 0
 
 	// Loop through fields
-	for _, field := range p.fields {
+	for _, field := range fields {
 		// Check if we are skipping fields
 		if skip > 0 {
 			skip -= 1

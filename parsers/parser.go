@@ -18,7 +18,7 @@ type Parser interface {
 	// Report which these crimes belong to.
 	//
 	// Additionally an error is returned, nil on success.
-	Parse(reportID int) ([]models.Crime, error)
+	Parse(reportID int, fields []string) ([]models.Crime, error)
 
 	// Range returns the date range which the report covers crimes for.
 	// Start time, then end time. Along with an error if one occurs, or nil
@@ -26,7 +26,7 @@ type Parser interface {
 	//
 	// The parse method is expected to be called before Range(). And an
 	// error will be returned if it has not been.
-	Range() (*time.Time, *time.Time, error)
+	Range(fields []string) (*time.Time, *time.Time, error)
 
 	// Count returns the number of Crime models parsed from a report. An
 	// error is returned if one occurs. Nil on success.

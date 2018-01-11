@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Noah-Huppert/crime-map/config"
 	"github.com/Noah-Huppert/crime-map/geo"
 	"github.com/Noah-Huppert/crime-map/http"
 	"github.com/Noah-Huppert/crime-map/models"
@@ -15,12 +16,20 @@ import (
 const file = "data/2017-10-12.pdf"
 
 func main() {
+	// Get config
+	c, err := config.NewConfig()
+	if err != nil {
+		fmt.Printf("error retrieving config: %s\n", err.Error())
+		os.Exit(1)
+		return
+	}
+	fmt.Printf("Env: %s\n", c.Env)
 	// Make context to control running of async jobs
 	ctx := context.Background()
 
 	// Migrate db
 	fmt.Println("migrating db")
-	err := models.Migrate()
+	err = models.Migrate()
 	if err != nil {
 		fmt.Printf("error migrating db: %s\n", err.Error())
 		os.Exit(1)

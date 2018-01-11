@@ -1,4 +1,4 @@
-.PHONY: run imports fmt db rdb db-rm db-stop view
+.PHONY: run test imports fmt db rdb db-rm db-stop view view-test-pdf
 
 # General
 APP_ENV=develop
@@ -14,9 +14,17 @@ DB_USER=${APP_ENV}
 DB_PASSWORD=${APP_ENV}
 DB_NAME=crime-map-${APP_ENV}
 
+# Test vars
+TST_DAT_DIR=test_data
+TST_SRC="${TST_DAT_DIR}/fields.pdf"
+
 # Runs the server
 run:
 	go run ${MAIN_SRC}
+
+# Test checks that the application code is functioning properly
+test:
+	go test ./...
 
 # Adds all required go imports
 imports:
@@ -53,3 +61,7 @@ db-rm:
 # Stop the database
 db-stop:
 	docker stop $(shell docker ps -qaf name=${DB_DOCKER_NAME})
+
+# Opens test pdf documents
+view-test-pdf:
+	xdg-open ${TST_SRC}

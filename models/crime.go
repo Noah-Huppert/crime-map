@@ -82,11 +82,11 @@ type Crime struct {
 
 	// Incidents holds the official classifications of the criminal
 	// activity which took place
-	Incidents pq.StringArray `gorm:"type:text[]"`
+	Incidents pq.StringArray
 
 	// Descriptions holds any details about the specific incidents which
 	// took place
-	Descriptions pq.StringArray `gorm:"type:text[]"`
+	Descriptions pq.StringArray
 
 	// Remediation is the action taken by the institution who reported the
 	// crime to deal with the criminal activity
@@ -98,6 +98,21 @@ type Crime struct {
 	// This field is used internally only. Not serialized and sent as
 	// part of any API responses.
 	ParseErrors []ParseError `json:"-"`
+}
+
+// Equal determines if the provided crime has the exact same field values as
+// the provided crime
+func (c Crime) Equal(b Crime) bool {
+	return (c.ID == b.ID) && (c.ReportID == b.ReportID) &&
+		(c.Page == b.Page) && (c.DateReported == b.DateReported) &&
+		(c.DateOccurredStart == b.DateOccurredStart) &&
+		(c.DateOccurredEnd == b.DateOccurredEnd) &&
+		(c.ReportSuperID == b.ReportSuperID) &&
+		(c.ReportSubID == b.ReportSubID) && (c.GeoLocID == b.GeoLocID) &&
+		(c.Incidents == b.Incidents) &&
+		(c.Descriptions == b.Descriptions) &&
+		(c.Remediation == b.Remediation) &&
+		(c.ParseErrors == b.ParseErrors)
 }
 
 // NewCrime creates a new Crime model from a database query sql.Rows

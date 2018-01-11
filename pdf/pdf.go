@@ -154,6 +154,7 @@ func (p *Pdf) Parse() ([]string, error) {
 					return p.fields, errors.New("error " +
 						"casting pdf text field to string")
 				}
+				fmt.Printf("pdf#Parse: %s\n", *val)
 
 				p.fields = append(p.fields, string(*val))
 			}
