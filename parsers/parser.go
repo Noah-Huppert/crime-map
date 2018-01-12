@@ -41,6 +41,10 @@ type Parser interface {
 // Parsers can then be run together to handle every type of text field a crime
 // or report may contain.
 type Parser interface {
+	// Parsers must implement String() which will return a identifying
+	// name of the parser to use in errors and various state information
+	fmt.Stringer
+
 	// Parse extracts information from a text field contained in a crime
 	// report pdf.
 	//
