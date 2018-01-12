@@ -51,11 +51,24 @@ type Parser interface {
 	// models.Crime pointers.
 	//
 	// The number of fields which were parsed should be returned. 0 if no
-	// fields were parsed. This value will be added to the current field
-	// index (`i`) for the next invocation of the parser.
-	// Additionally an error is returned if one occurs, nil on success.
+	// fields were parsed.
+	//
+	// Finally an error is returned if one occurs. Nil on success.
+	//
+	// To indicate the provided crime is fully parsed return the
+	// ErrCrimeParsed value. This will indicate to the caller that they
+	// should add the currently provided crime to a list of parsed crimes.
+	// And provide a new crime model reference for the next invocation.
 	Parse(i uint, fields []string, report *models.Report, crime *models.Crime) (uint, error)
 }
+
+// ErrCrimeParsed indicates that the provided crime has been completely
+// parsed during the invocation of the parser.
+//
+// If this error is received: Append the crime you are currently providing
+// to a list of parsed crimes. Then create a new empty crime model. And provide
+// this on the next invocation of the parser.
+var ErrCrimeParsed string = errors.New("crime has been successfully parsed")
 
 // determineUniversity figures out which University a crime report was
 // published from. By reading in the text fields present in a report. And
