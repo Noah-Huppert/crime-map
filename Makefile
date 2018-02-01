@@ -1,4 +1,4 @@
-.PHONY: run test imports fmt db rdb db-rm db-stop view view-test-pdf
+.PHONY: run test t imports fmt db rdb db-rm db-stop view view-test-pdf
 
 # General
 APP_ENV=develop
@@ -25,6 +25,9 @@ run:
 # Test checks that the application code is functioning properly
 test:
 	go test ./...
+
+# Shortcut for test target
+t: test
 
 # Adds all required go imports
 imports:

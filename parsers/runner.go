@@ -1,6 +1,9 @@
 package parsers
 
 import (
+	"fmt"
+
+	"github.com/Noah-Huppert/crime-map/errs"
 	"github.com/Noah-Huppert/crime-map/models"
 )
 
@@ -20,47 +23,51 @@ type ParserRunner struct {
 	//
 	// The order of Parsers in this slice indicates precedence.
 	parsers []Parser
+
+	// crimes holds the Crime models which have been parsed so far by the
+	// specified Parsers
+	crimes []*models.Crime
 }
 
 // NewParserRunner creates and returns a ParserRunner reference
 func NewParserRunner() *ParserRunner {
 	return &ParserRunner{
 		parsers: []Parser{},
+		crimes:  []*models.Crime{},
 	}
 }
 
 // Parse will parse the provided fields with the previously added
-// Parsers.
+// Parsers. A Report model should be provided to save information about the
+// report fields being parsed.
 //
 // The Crimes which were parsed from these fields will be returned.
-// Along with any error that occurs. Nil on success.
-func (r ParserRunner) Parse(fields []string) ([]*models.Crime, error) {
+// Along with any error that occurs, Nil on success.
+func (r ParserRunner) Parse(report *models.Report, fields []string) ([]*models.Crime, error) {
 	// crimes holds the Crime models parsed by the parsers
 	crimes := []*models.Crime{}
 
 	// crime is the Crime model currently being parsed
 	crime := &models.Crime{}
 
-	// report is the Report model currently being parsed
-	report := &models.Report{}
-
 	// Loop through fields and parse
-	for fI, field := range fields {
+	var fI uint = 0
+	for fI < uint(len(fields)) {
 		// Run one parser after another until a field is successfully
 		// parsed. Then move to the next field until done.
-		for pI, parser := range r.parsers {
-			delta, err := parser.Parse(i, fields, report, crime)
+		for _, parser := range r.parsers {
+			delta, err := parser.Parse(fI, fields, report, crime)
 
 			// Check if current crime has been successfully parsed
-			if err == ErrCrimeParsed {
+			if err == errs.ErrCrimeParsed {
 				// Add current crime to list
 				crimes = append(crimes, crime)
 
 				// Make new crime model
-				crime := &models.Crime{}
+				crime = &models.Crime{}
 			} else if err != nil {
 				// If other error
-				return crimes, fmt.Errorf("error running %s parser "+
+				return nil, fmt.Errorf("error running %s parser "+
 					"against field with index %d, err: %s", parser,
 					fI, err.Error())
 			}
@@ -68,7 +75,7 @@ func (r ParserRunner) Parse(fields []string) ([]*models.Crime, error) {
 			// Check if any fields were parsed
 			if delta > 0 {
 				// Increment field index
-				i += delta
+				fI += delta
 
 				// Go to next field
 				break
@@ -76,8 +83,8 @@ func (r ParserRunner) Parse(fields []string) ([]*models.Crime, error) {
 		}
 
 		// If not parsed, error
-		return crimes, fmt.Errorf("no parser parsed field with index"+
-			" %d, field: %s", fI, field)
+		return nil, fmt.Errorf("no parser parsed field with index"+
+			" %d, field: %s", fI, fields[fI])
 	}
 
 	// Success
@@ -88,5 +95,4 @@ func (r ParserRunner) Parse(fields []string) ([]*models.Crime, error) {
 // be parsed.
 func (r *ParserRunner) Add(parser Parser) {
 	r.parsers = append(r.parsers, parser)
-	return nil
 }

@@ -1,5 +1,15 @@
 package parsers
 
+// NewDrexelRunner creates a new ParserRunner populated with the correct parsers
+// needed extract all crime report information.
+func NewDrexelRunner() *ParserRunner {
+	r := NewParserRunner()
+	r.Add(DateRangeParser{})
+
+	return r
+}
+
+/*
 import (
 	"errors"
 	"fmt"
@@ -7,18 +17,15 @@ import (
 	"os"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/Noah-Huppert/crime-map/errs"
 	"github.com/Noah-Huppert/crime-map/geo"
 	"github.com/Noah-Huppert/crime-map/models"
 )
 
 // DrexelUName holds the Drexel University's name
 const DrexelUName string = "Drexel University"
-
-// headerDateRangeExpr is the regexp used to match a report header's first line
-var headerDateRangeExpr *regexp.Regexp = regexp.MustCompile("^From ([A-Z][a-z]+) ([0-9]{1,2}), ([0-9]{4}) to ([A-Z][a-z]+) ([0-9]{1,2}), ([0-9]{4})\\.$")
 
 // dateExpr is the regexp used to match a date in the pdf report
 var dateExpr *regexp.Regexp = regexp.MustCompile("^([0-9]{2})\\/([0-9]{2})\\/([0-9]{2}) - [A-Z]+ at ([0-9]{2}):([0-9]{2})$")
@@ -117,7 +124,7 @@ func (p *DrexelParser) Range(fields []string) (*time.Time, *time.Time, error) {
 func (p DrexelParser) Count() (uint, error) {
 	// Check if not parsed yet
 	if !p.parsedCrimes {
-		return 0, ErrReportNotParsed
+		return 0, errs.ErrNotParsed
 	}
 
 	// If parsed, return count
@@ -128,271 +135,277 @@ func (p DrexelParser) Count() (uint, error) {
 
 // Parse interprets a pdf's text fields into Crime structs. For the style of
 // report Drexel University releases.
-func (p *DrexelParser) Parse(reportID int, fields []string) ([]models.Crime, error) {
-	// Check if already parsed
-	if p.parsedCrimes {
-		// Return results
-		return p.crimes, ErrReportParsed
-	}
-
-	// c holds the Crime struct currently being parsed
-	var c models.Crime
-
-	// skip indicates how many fields the parser should skip
-	var skip int
-
-	// consume indicates how many fields the parser should consume, if
-	// multiple fields need to be consumed in a row
-	var consume int
-
-	// consumeGlob1 indicates if the date reported, location, report ID,
-	// and incidents field values come after the skipping is done
-	var consumeGlob1 bool
-
-	// consumeDOccurred indicates if the date occurred field follows the skipped
-	// fields
-	var consumeDOccurred bool
-
-	// consumeDesc indicates if the synopsis field is being consumed
-	var consumeDesc bool
-
-	// consumeFix indicates that the remediation field is coming up next
-	var consumeFix bool
-
-	// consumeCrimeCount indicates that the total crime count field is
-	// coming up next
-	var consumeCrimeCount bool
-
-	// pageNum holds the current page number
-	pageNum := 0
-
-	// Loop through fields
-	for _, field := range fields {
-		// Check if we are skipping fields
-		if skip > 0 {
-			skip -= 1
-			continue
+func (p *DrexelParser) Parse(i uint, fields []string, report *models.Report, crime *models.Crime) (uint, error) {
+		// Check if already parsed
+		if p.parsedCrimes {
+			// Return results
+			return p.crimes, errs.ErrParsed
 		}
 
-		// Check if first line of header
-		if newSkip, err := p.parseHeaderRange(field); err != errNotHeaderDateRange {
-			// Check if error occurred
-			if err != nil {
-				return p.crimes, fmt.Errorf("error parsing "+
-					"header date range: %s", err.Error())
+		// c holds the Crime struct currently being parsed
+		var c models.Crime
+
+		// skip indicates how many fields the parser should skip
+		var skip int
+
+		// consume indicates how many fields the parser should consume, if
+		// multiple fields need to be consumed in a row
+		var consume int
+
+		// consumeGlob1 indicates if the date reported, location, report ID,
+		// and incidents field values come after the skipping is done
+		var consumeGlob1 bool
+
+		// consumeDOccurred indicates if the date occurred field follows the skipped
+		// fields
+		var consumeDOccurred bool
+
+		// consumeDesc indicates if the synopsis field is being consumed
+		var consumeDesc bool
+
+		// consumeFix indicates that the remediation field is coming up next
+		var consumeFix bool
+
+		// consumeCrimeCount indicates that the total crime count field is
+		// coming up next
+		var consumeCrimeCount bool
+
+		// pageNum holds the current page number
+		pageNum := 0
+
+		// Loop through fields
+		for _, field := range fields {
+			// Check if we are skipping fields
+			if skip > 0 {
+				skip -= 1
+				continue
 			}
 
-			// Set new skip value if not 0
-			if newSkip > 0 {
-				skip = newSkip
-			}
-		} else if footerPageNumExpr.MatchString(field) { // Check if
-			// first line of footer
-			skip = 5
-			pageNum += 1
-		} else if consumeGlob1 { // Check if we are consuming glob 1
-			// If consuming date reported field
-			if consume == 4 {
-				d, err := parseDate(field)
-				if err != nil {
-					return p.crimes, fmt.Errorf("error parsing"+
-						" reported at field: %s",
-						err.Error())
-				}
-
-				c.Page = pageNum
-				c.DateReported = *d
-				consume--
-			} else if consume == 3 { // If consuming location field
-				// Gets GeoLoc with just a populated ID field.
-				// This allows us to set the crime foreign key,
-				// but not know anything about the location
-				loc, err := p.geoCache.InsertIfNew(field)
-
-				if err != nil {
-					return p.crimes, fmt.Errorf("error "+
-						"getting cached GeoLoc: %s",
-						err.Error())
-				}
-
-				// Set GeoLoc FK
-				c.GeoLocID = loc.ID
-
-				consume--
-			} else if consume == 2 { // If consuming report ID field
-				// Split by dash
-				parts := strings.Split(field, "-")
-
-				// Check correct number of parts
-				if len(parts) != 2 {
-					return p.crimes, fmt.Errorf("report ID "+
-						"field has incorrect number of"+
-						" parts, field: %s, parts: %d, "+
-						" expected parts: 2",
-						field, len(parts))
-				}
-
-				// Parse both ids
-				id, err := strconv.ParseUint(parts[0], 10, 64)
+			// Check if first line of header
+			if newSkip, err := p.parseHeaderRange(field); err != errNotHeaderDateRange {
+				// Check if error occurred
 				if err != nil {
 					return p.crimes, fmt.Errorf("error parsing "+
-						"report super ID into uint: %s",
-						err.Error())
+						"header date range: %s", err.Error())
 				}
-				c.ReportSuperID = uint(id)
 
-				id, err = strconv.ParseUint(parts[1], 10, 64)
+				// Set new skip value if not 0
+				if newSkip > 0 {
+					skip = newSkip
+				}
+			} else if footerPageNumExpr.MatchString(field) { // Check if
+				// first line of footer
+				skip = 5
+				pageNum += 1
+			} else if consumeGlob1 { // Check if we are consuming glob 1
+				// If consuming date reported field
+				if consume == 4 {
+					d, err := parseDate(field)
+					if err != nil {
+						return p.crimes, fmt.Errorf("error parsing"+
+							" reported at field: %s",
+							err.Error())
+					}
+
+					c.Page = pageNum
+					c.DateReported = *d
+					consume--
+				} else if consume == 3 { // If consuming location field
+					// Gets GeoLoc with just a populated ID field.
+					// This allows us to set the crime foreign key,
+					// but not know anything about the location
+					loc, err := p.geoCache.InsertIfNew(field)
+
+					if err != nil {
+						return p.crimes, fmt.Errorf("error "+
+							"getting cached GeoLoc: %s",
+							err.Error())
+					}
+
+					// Set GeoLoc FK
+					c.GeoLocID = loc.ID
+
+					consume--
+				} else if consume == 2 { // If consuming report ID field
+					// Split by dash
+					parts := strings.Split(field, "-")
+
+					// Check correct number of parts
+					if len(parts) != 2 {
+						return p.crimes, fmt.Errorf("report ID "+
+							"field has incorrect number of"+
+							" parts, field: %s, parts: %d, "+
+							" expected parts: 2",
+							field, len(parts))
+					}
+
+					// Parse both ids
+					id, err := strconv.ParseUint(parts[0], 10, 64)
+					if err != nil {
+						return p.crimes, fmt.Errorf("error parsing "+
+							"report super ID into uint: %s",
+							err.Error())
+					}
+					c.ReportSuperID = uint(id)
+
+					id, err = strconv.ParseUint(parts[1], 10, 64)
+					if err != nil {
+						return p.crimes, fmt.Errorf("error parsing "+
+							"report Id into uint: %s",
+							err.Error())
+					}
+					c.ReportSubID = uint(id)
+
+					consume--
+				} else if consume == 1 { // If consuming incidents field
+					c.Incidents = []string{field}
+
+					// And reset glob 1 parser flags
+					consumeGlob1 = false
+					consume = 0
+				}
+			} else if consumeDOccurred { // Check if we are consuming date
+				// occurred
+
+				// Split dates
+				matches := dateRangeExpr.FindStringSubmatch(field)
+
+				// Check correct number of dates
+				if len(matches) != 3 {
+					return p.crimes, fmt.Errorf("error parsing date "+
+						"occurred, incorrect number of dates, "+
+						"field: %s, expected 2, got: %d",
+						field, len(matches)-1)
+				}
+
+				// Parse dates
+				start, err := parseDate(matches[1])
 				if err != nil {
-					return p.crimes, fmt.Errorf("error parsing "+
-						"report Id into uint: %s",
-						err.Error())
-				}
-				c.ReportSubID = uint(id)
-
-				consume--
-			} else if consume == 1 { // If consuming incidents field
-				c.Incidents = []string{field}
-
-				// And reset glob 1 parser flags
-				consumeGlob1 = false
-				consume = 0
-			}
-		} else if consumeDOccurred { // Check if we are consuming date
-			// occurred
-
-			// Split dates
-			matches := dateRangeExpr.FindStringSubmatch(field)
-
-			// Check correct number of dates
-			if len(matches) != 3 {
-				return p.crimes, fmt.Errorf("error parsing date "+
-					"occurred, incorrect number of dates, "+
-					"field: %s, expected 2, got: %d",
-					field, len(matches)-1)
-			}
-
-			// Parse dates
-			start, err := parseDate(matches[1])
-			if err != nil {
-				return p.crimes, fmt.Errorf("error parsing occurred"+
-					" start date, field: %s, err: %s",
-					field, err.Error())
-			}
-
-			end, err := parseDate(matches[2])
-			if err != nil {
-				return p.crimes, fmt.Errorf("error parsing occurred"+
-					" end date, field: %s, err: %s",
-					field, err.Error())
-			}
-
-			// Check start date is after end date
-			if start.After(*end) {
-				// If so, add 12 hours to end date
-				fixedEnd := end.Add(time.Hour *
-					time.Duration(12))
-
-				// Check again
-				if start.After(fixedEnd) {
-					// We don't know how to fix, error
-					return p.crimes, fmt.Errorf("error "+
-						"parsing occurred date, start "+
-						"date is before end date, "+
-						"after correction, field: %s",
-						field)
+					return p.crimes, fmt.Errorf("error parsing occurred"+
+						" start date, field: %s, err: %s",
+						field, err.Error())
 				}
 
-				// Note parse error
-				pErr := models.ParseError{
-					Field:    "date_occurred",
-					Original: field,
-					Corrected: fmt.Sprintf("%s - %s",
-						start.String(),
-						fixedEnd.String()),
-					ErrType: models.TypeBadRangeEnd,
+				end, err := parseDate(matches[2])
+				if err != nil {
+					return p.crimes, fmt.Errorf("error parsing occurred"+
+						" end date, field: %s, err: %s",
+						field, err.Error())
 				}
 
-				// Save parse error
-				c.ParseErrors = append(c.ParseErrors, pErr)
+				// Check start date is after end date
+				if start.After(*end) {
+					// If so, add 12 hours to end date
+					fixedEnd := end.Add(time.Hour *
+						time.Duration(12))
 
-				// If success, replace
-				end = &fixedEnd
+					// Check again
+					if start.After(fixedEnd) {
+						// We don't know how to fix, error
+						return p.crimes, fmt.Errorf("error "+
+							"parsing occurred date, start "+
+							"date is before end date, "+
+							"after correction, field: %s",
+							field)
+					}
+
+					// Note parse error
+					pErr := models.ParseError{
+						Field:    "date_occurred",
+						Original: field,
+						Corrected: fmt.Sprintf("%s - %s",
+							start.String(),
+							fixedEnd.String()),
+						ErrType: models.TypeBadRangeEnd,
+					}
+
+					// Save parse error
+					c.ParseErrors = append(c.ParseErrors, pErr)
+
+					// If success, replace
+					end = &fixedEnd
+				}
+
+				// Save
+				c.DateOccurredStart = start
+				c.DateOccurredEnd = end
+
+				consumeDOccurred = false
+			} else if consumeDesc { // Check if consuming synopsis
+				// Check if end of consuming synopsis
+				if field == fieldLabelFix {
+					// End of synopsis field values
+					consumeDesc = false
+
+					// Beginning of fix field
+					consumeFix = true
+				} else { // Otherwise, consume
+					c.Descriptions = append(c.Descriptions, field)
+				}
+			} else if consumeFix { // Check if we should consume the
+				// remediation field
+				c.Remediation = field
+				consumeFix = false
+
+				// And add crime to list
+				c.ReportID = reportID
+
+				if c.DateOccurredStart == nil {
+					p.logger.Printf("empty: %s\n", c)
+					// TODO: Figure out why some Crimes have "empty" date_occurred ranges
+				}
+				p.crimes = append(p.crimes, c)
+
+				c = models.Crime{}
+			} else if field == fieldLabelReported { // Check if beginning
+				// of glob 1
+				skip = 2
+				consumeGlob1 = true
+				consume = 4
+			} else if field == fieldLabelIncidents { // Check if date
+				// occurred field will come next
+				consumeDOccurred = true
+			} else if field == fieldLabelOccurred { // Check if synopsis
+				// field will come next
+				skip = 1
+				consumeDesc = true
+				c.Descriptions = []string{}
+			} else if field == fieldLabelCrimeCount { // Check if incidents
+				// listed count comes next
+				consumeCrimeCount = true
+			} else if consumeCrimeCount { // Check if consuming crime count
+				count, err := strconv.Atoi(field[1:])
+				if err != nil {
+					return p.crimes, fmt.Errorf("error parsing number"+
+						" of listed crimes: %s", err.Error())
+				}
+
+				consumeCrimeCount = false
+
+				// Check count matches
+				if len(p.crimes) != count {
+					return p.crimes, fmt.Errorf("number of listed "+
+						"crimes and number of crimes parsed "+
+						"does not match: listed: %d, parsed: %d",
+						count,
+						len(p.crimes))
+				}
+			} else {
+				return p.crimes, fmt.Errorf("error parsing field, "+
+					"unknown value: %s", field)
 			}
-
-			// Save
-			c.DateOccurredStart = start
-			c.DateOccurredEnd = end
-
-			consumeDOccurred = false
-		} else if consumeDesc { // Check if consuming synopsis
-			// Check if end of consuming synopsis
-			if field == fieldLabelFix {
-				// End of synopsis field values
-				consumeDesc = false
-
-				// Beginning of fix field
-				consumeFix = true
-			} else { // Otherwise, consume
-				c.Descriptions = append(c.Descriptions, field)
-			}
-		} else if consumeFix { // Check if we should consume the
-			// remediation field
-			c.Remediation = field
-			consumeFix = false
-
-			// And add crime to list
-			c.ReportID = reportID
-
-			if c.DateOccurredStart == nil {
-				p.logger.Printf("empty: %s\n", c)
-				// TODO: Figure out why some Crimes have "empty" date_occurred ranges
-			}
-			p.crimes = append(p.crimes, c)
-
-			c = models.Crime{}
-		} else if field == fieldLabelReported { // Check if beginning
-			// of glob 1
-			skip = 2
-			consumeGlob1 = true
-			consume = 4
-		} else if field == fieldLabelIncidents { // Check if date
-			// occurred field will come next
-			consumeDOccurred = true
-		} else if field == fieldLabelOccurred { // Check if synopsis
-			// field will come next
-			skip = 1
-			consumeDesc = true
-			c.Descriptions = []string{}
-		} else if field == fieldLabelCrimeCount { // Check if incidents
-			// listed count comes next
-			consumeCrimeCount = true
-		} else if consumeCrimeCount { // Check if consuming crime count
-			count, err := strconv.Atoi(field[1:])
-			if err != nil {
-				return p.crimes, fmt.Errorf("error parsing number"+
-					" of listed crimes: %s", err.Error())
-			}
-
-			consumeCrimeCount = false
-
-			// Check count matches
-			if len(p.crimes) != count {
-				return p.crimes, fmt.Errorf("number of listed "+
-					"crimes and number of crimes parsed "+
-					"does not match: listed: %d, parsed: %d",
-					count,
-					len(p.crimes))
-			}
-		} else {
-			return p.crimes, fmt.Errorf("error parsing field, "+
-				"unknown value: %s", field)
 		}
-	}
 
-	// Success
-	p.parsedCrimes = true
-	return p.crimes, nil
+		// Success
+		p.parsedCrimes = true
+		return p.crimes, nil
 
+	return 0, nil
+
+}
+
+func (p *DrexelParser) String() string {
+	return "DrexelParser"
 }
 
 // parseDate Creates a time struct from a drexel date on a report. The offset
@@ -523,32 +536,23 @@ func (p *DrexelParser) parseHeaderRange(field string) (int, error) {
 
 	// Check if field is header date range
 	if matches := headerDateRangeExpr.FindStringSubmatch(field); matches != nil {
-		// Check if already parsed
-		if p.parsedRange {
-			// Exit
-			return validSkip, nil
-		}
-
 		// Convert start date
-		startRange, err := p.parseHeaderDate(matches, 0)
+		startRange, err := date.ParseDate(matches[0:3])
 		if err != nil {
 			return errSkip, fmt.Errorf("error converting start "+
 				"header date to time.Time: %s",
 				err.Error())
 		}
-		p.startRange = startRange
+		report.RangeStartDate = startRange
 
 		// Convert end date
-		endRange, err := p.parseHeaderDate(matches, 1)
+		endRange, err := date.ParseDate(matches[3:6])
 		if err != nil {
 			return errSkip, fmt.Errorf("error converting end "+
 				"header date to time.Time: %s",
 				err.Error())
 		}
-		p.endRange = endRange
-
-		// Success, indicate we should skip a couple fields
-		p.parsedRange = true
+		report.RangeEndDate = endRange
 
 		// Mark as parsed and skip fields
 		return validSkip, nil
@@ -557,3 +561,4 @@ func (p *DrexelParser) parseHeaderRange(field string) (int, error) {
 	// If not a header date range
 	return 0, errNotHeaderDateRange
 }
+*/

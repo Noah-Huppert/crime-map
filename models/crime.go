@@ -9,6 +9,7 @@ import (
 
 	"github.com/Noah-Huppert/crime-map/date"
 	"github.com/Noah-Huppert/crime-map/dstore"
+	"github.com/Noah-Huppert/crime-map/str"
 )
 
 // OrderByType is the type alias used to represent the field used to order rows
@@ -109,10 +110,10 @@ func (c Crime) Equal(b Crime) bool {
 		(c.DateOccurredEnd == b.DateOccurredEnd) &&
 		(c.ReportSuperID == b.ReportSuperID) &&
 		(c.ReportSubID == b.ReportSubID) && (c.GeoLocID == b.GeoLocID) &&
-		(c.Incidents == b.Incidents) &&
-		(c.Descriptions == b.Descriptions) &&
+		(str.SlicesEq(nil, c.Incidents, b.Incidents)) &&
+		(str.SlicesEq(nil, c.Descriptions, b.Descriptions)) &&
 		(c.Remediation == b.Remediation) &&
-		(c.ParseErrors == b.ParseErrors)
+		(ParseErrsSlicesEq(nil, c.ParseErrors, b.ParseErrors))
 }
 
 // NewCrime creates a new Crime model from a database query sql.Rows

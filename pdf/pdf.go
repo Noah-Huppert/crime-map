@@ -8,6 +8,8 @@ import (
 	pdf "github.com/unidoc/unidoc/pdf/model"
 	"os"
 	"strings"
+
+	"github.com/Noah-Huppert/crime-map/errs"
 )
 
 // Pdf holds data about a pdf file
@@ -67,7 +69,7 @@ func (p Pdf) Pages() (uint, bool) {
 func (p *Pdf) Parse() ([]string, error) {
 	// If already parsed, error
 	if p.IsParsed() {
-		return p.fields, errors.New("pdf file already parsed")
+		return p.fields, errs.ErrParsed
 	}
 
 	// Open file

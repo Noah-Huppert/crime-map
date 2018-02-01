@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	"fmt"
+	"testing"
 
 	"github.com/Noah-Huppert/crime-map/dstore"
 )
@@ -51,6 +52,49 @@ func (e ParseError) String() string {
 		"Corrected: %s\n"+
 		"ErrType: %s",
 		e.ID, e.CrimeID, e.Field, e.Original, e.Corrected, e.ErrType)
+}
+
+// Equal determines if the provided ParseError has identical values.
+func (e ParseError) Equal(other ParseError) bool {
+	return (e.ID == other.ID) &&
+		(e.CrimeID == other.CrimeID) &&
+		(e.Field == other.Field) &&
+		(e.Original == other.Original) &&
+		(e.Corrected == other.Corrected) &&
+		(e.ErrType == other.ErrType)
+}
+
+// ParseErrsSlicesEq determines if a slice of ParseError structs are equal.
+// Equality errors will be printed using the provided testing.T object, if it
+// is not nil.
+func ParseErrsSlicesEq(t *testing.T, expected []ParseError, actual []ParseError) bool {
+	// Check length
+	if len(expected) != len(actual) {
+		if t != nil {
+			t.Fatalf("expected length not equal to actual length, "+
+				"len(expected) = %d, len(actual) = %d", len(expected),
+				len(actual))
+		}
+
+		return false
+	}
+
+	// Loop through and check Crimes
+	for i, expVal := range expected {
+		actVal := actual[i]
+
+		if !(expVal.Equal(actVal)) {
+			if t != nil {
+				t.Fatalf("%d index value of actual does not equal "+
+					"expected, expected[i]: %s, actual[i]: %s",
+					i, expVal, actVal)
+			}
+
+			return false
+		}
+	}
+
+	return true
 }
 
 // StringParseErrors converts a slice of Parse Errors to a slice of strings

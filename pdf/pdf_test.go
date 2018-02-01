@@ -3,7 +3,7 @@ package pdf
 import (
 	"testing"
 
-	"github.com/Noah-Huppert/crime-map/test"
+	"github.com/Noah-Huppert/crime-map/str"
 )
 
 // FieldsTestFile is the name of the pdf file used to test Pdf.fields related
@@ -37,5 +37,5 @@ func TestReadsFields(t *testing.T) {
 	t.Logf("pages: %d, parsed: %\n", pages, parsed)
 	t.Logf("expected: %s\n=========\n========\nactual: %s\n", FieldsFileContents, fields)
 
-	test.StrSlicesEq(t, FieldsFileContents, fields)
+	str.SlicesEq(t, FieldsFileContents, fields)
 }

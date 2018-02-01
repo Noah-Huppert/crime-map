@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Noah-Huppert/crime-map/config"
+	"github.com/Noah-Huppert/crime-map/errs"
 	"github.com/Noah-Huppert/crime-map/geo"
 	"github.com/Noah-Huppert/crime-map/http"
 	"github.com/Noah-Huppert/crime-map/models"
@@ -41,10 +42,10 @@ func main() {
 
 	// Parse crimes
 	fmt.Println("parsing report")
-	r := parsers.NewReader(file, geoCache)
+	r := parsers.NewReader(geoCache)
 
-	crimes, err := r.Parse()
-	if err == parsers.ErrReportParsed {
+	crimes, err := r.Parse(file)
+	if err == errs.ErrParsed {
 		fmt.Printf("skipping report, already parsed\n")
 	} else if err != nil {
 		fmt.Printf("error parsing report: %s\n", err.Error())
