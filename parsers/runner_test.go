@@ -107,16 +107,20 @@ func TestParserRunnerNoParserErr(t *testing.T) {
 	report := &models.Report{}
 	_, err := runner.Parse(report, []string{"C", "A"})
 
+	// Save error to check later
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+
 	// Ensure match
-	matched, err := regexp.MatchString("error running .* parser against "+
-		"field with index [0-9]*, err: .*", err.Error())
+	matched, err := regexp.MatchString("no parser processed "+
+		"field with index [0-9]*, field: .*", errStr)
 	if err != nil {
 		t.Fatalf("error checking ParserRunner.Parse error: %s",
 			err.Error())
-	} else if err == nil {
-		t.Fatal("ParserRunner.Parse error can not be null, was")
 	} else if !matched {
 		t.Fatalf("ParserRunner.Parse error does not match expected "+
-			"pattern, actual: %s", err.Error())
+			"pattern, actual: \"%s\"", errStr)
 	}
 }
