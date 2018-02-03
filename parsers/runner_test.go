@@ -1,6 +1,7 @@
 package parsers
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/Noah-Huppert/crime-map/errs"
@@ -64,9 +65,9 @@ func (p SampleParserB) Parse(i uint, fields []string, report *models.Report,
 	return 0, nil
 }
 
-// TestParserRunnerAdd ensures the ParserRunner.Add method causes the
-// ParserRunner.Parse method to use the provided Parser
-func TestParserRunnerAdd(t *testing.T) {
+// TestParserRunnerAddParse ensures the ParserRunner.Add & .Parse methods
+// work as expected
+func TestParserRunnerAddParse(t *testing.T) {
 	// Make runner
 	runner := NewParserRunner()
 
@@ -90,4 +91,32 @@ func TestParserRunnerAdd(t *testing.T) {
 		&models.Crime{ID: SampleIDB},
 		&models.Crime{ID: SampleIDA},
 	}, crimes)
+}
+
+// TestParserRunnerNoParserErr ensures that ParserRunner.Parse throws an error
+// when a field is encountered that does not have an associated parser.
+func TestParserRunnerNoParserErr(t *testing.T) {
+	// Make runner
+	runner := NewParserRunner()
+
+	// Add Mock Parsers
+	runner.Add(SampleParserA{})
+	runner.Add(SampleParserB{})
+
+	// Parse
+	report := &models.Report{}
+	_, err := runner.Parse(report, []string{"C", "A"})
+
+	// Ensure match
+	matched, err := regexp.MatchString("error running .* parser against "+
+		"field with index [0-9]*, err: .*", err.Error())
+	if err != nil {
+		t.Fatalf("error checking ParserRunner.Parse error: %s",
+			err.Error())
+	} else if err == nil {
+		t.Fatal("ParserRunner.Parse error can not be null, was")
+	} else if !matched {
+		t.Fatalf("ParserRunner.Parse error does not match expected "+
+			"pattern, actual: %s", err.Error())
+	}
 }

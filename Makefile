@@ -18,13 +18,16 @@ DB_NAME=crime-map-${APP_ENV}
 TST_DAT_DIR=test_data
 TST_SRC="${TST_DAT_DIR}/fields.pdf"
 
+TST_OUT_DIR=test_out
+TST_COVER_PATH="${TST_OUT_DIR}/coverage.out"
+
 # Runs the server
 run:
 	go run ${MAIN_SRC}
 
 # Test checks that the application code is functioning properly
 test:
-	go test ./...
+	go test -cover ./...
 
 # Shortcut for test target
 t: test

@@ -55,7 +55,7 @@ func (r ParserRunner) Parse(report *models.Report, fields []string) ([]*models.C
 	for fI < uint(len(fields)) {
 		// Run one parser after another until a field is successfully
 		// parsed. Then move to the next field until done.
-		for _, parser := range r.parsers {
+		for pI, parser := range r.parsers {
 			delta, err := parser.Parse(fI, fields, report, crime)
 
 			// Check if current crime has been successfully parsed
@@ -79,12 +79,15 @@ func (r ParserRunner) Parse(report *models.Report, fields []string) ([]*models.C
 
 				// Go to next field
 				break
+			} else if pI+1 == len(r.parsers) { // If last parser
+				// and no delta value > 0
+
+				// If not parsed, error
+				return nil, fmt.Errorf("no parser processed field with index"+
+					" %d, field: %s", fI, fields[fI])
+
 			}
 		}
-
-		// If not parsed, error
-		return nil, fmt.Errorf("no parser parsed field with index"+
-			" %d, field: %s", fI, fields[fI])
 	}
 
 	// Success
