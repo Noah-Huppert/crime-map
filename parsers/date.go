@@ -18,16 +18,22 @@ import (
 // Dates can be either 1 or 2 digits. Years must be in their full 4 digit form.
 type DateRangeParser struct{}
 
+// DateRangeParserName holds the name of the DateRangeParser
+const DateRangeParserName string = "DateRangeParser"
+
 // rangeExpr is a regexp used to match a date range found in a crime report
 var rangeExpr *regexp.Regexp = regexp.MustCompile("^From ([A-Z][a-z]+) ([0-9]{1,2}), ([0-9]{4}) to ([A-Z][a-z]+) ([0-9]{1,2}), ([0-9]{4})\\.$")
 
-// Parse implements the Parser.Parse method for the DateRangeParser
+// Parse implements the Parser.Parse method for the DateRangeParser. It saves
+// any parsed date range information in the provided Report.
+//
+// The Crime argument does not need to be passed. And can be nil.
 func (p DateRangeParser) Parse(i uint, fields []string, report *models.Report,
 	crime *models.Crime) (uint, error) {
 
 	if matches := rangeExpr.FindStringSubmatch(fields[i]); matches != nil {
 		// Convert start date
-		startRange, err := date.ParseDate(matches[3:6])
+		startRange, err := date.ParseDate(matches[1:4])
 		if err != nil {
 			return 0, fmt.Errorf("error converting start "+
 				"header date to time.Time: %s",
@@ -36,7 +42,7 @@ func (p DateRangeParser) Parse(i uint, fields []string, report *models.Report,
 		report.RangeStartDate = startRange
 
 		// Convert end date
-		endRange, err := date.ParseDate(matches[3:6])
+		endRange, err := date.ParseDate(matches[4:7])
 		if err != nil {
 			return 0, fmt.Errorf("error converting end "+
 				"header date to time.Time: %s",
@@ -53,5 +59,5 @@ func (p DateRangeParser) Parse(i uint, fields []string, report *models.Report,
 }
 
 func (p DateRangeParser) String() string {
-	return "DateRangeParser"
+	return DateRangeParserName
 }

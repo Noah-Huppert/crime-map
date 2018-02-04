@@ -1,6 +1,8 @@
 package parsers
 
 import (
+	"errors"
+	"fmt"
 	"regexp"
 	"testing"
 
@@ -65,6 +67,26 @@ func (p SampleParserB) Parse(i uint, fields []string, report *models.Report,
 	return 0, nil
 }
 
+// SampleErrParser implements the Parser interface by always throwing an error
+// when a field is given to parse
+type SampleErrParser struct{}
+
+// SampleErrParserName is the name of the SampleErrParser
+const SampleErrParserName string = "SampleErrParser"
+
+// SampleParserErr is the error returned by the SampleErrParser
+var SampleParserErr = errors.New("sample error")
+
+func (p SampleErrParser) String() string {
+	return SampleErrParserName
+}
+
+func (p SampleErrParser) Parse(i uint, fields []string, report *models.Report,
+	crime *models.Crime) (uint, error) {
+
+	return 0, SampleParserErr
+}
+
 // TestParserRunnerAddParse ensures the ParserRunner.Add & .Parse methods
 // work as expected
 func TestParserRunnerAddParse(t *testing.T) {
@@ -117,7 +139,40 @@ func TestParserRunnerNoParserErr(t *testing.T) {
 	matched, err := regexp.MatchString("no parser processed "+
 		"field with index [0-9]*, field: .*", errStr)
 	if err != nil {
-		t.Fatalf("error checking ParserRunner.Parse error: %s",
+		t.Fatalf("error matching ParserRunner.Parse error: %s",
+			err.Error())
+	} else if !matched {
+		t.Fatalf("ParserRunner.Parse error does not match expected "+
+			"pattern, actual: \"%s\"", errStr)
+	}
+}
+
+// TestParserRunnerErr tests the ParserRunner.Parse method when a parser throws
+// an error
+func TestParserRunnerErr(t *testing.T) {
+	// Make runner
+	runner := NewParserRunner()
+
+	// Add mock parsers
+	runner.Add(SampleParserA{})
+	runner.Add(SampleErrParser{})
+
+	// Parse
+	report := &models.Report{}
+	_, err := runner.Parse(report, []string{"C", "A"})
+
+	// Save error to check later
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+
+	// Ensure match
+	matched, err := regexp.MatchString(fmt.Sprintf("error running %s "+
+		"parser against field with index 0, err: %s",
+		SampleErrParserName, SampleParserErr), errStr)
+	if err != nil {
+		t.Fatalf("error matching ParserRunner.Parser error: %s",
 			err.Error())
 	} else if !matched {
 		t.Fatalf("ParserRunner.Parse error does not match expected "+
