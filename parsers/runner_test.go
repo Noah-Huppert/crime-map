@@ -115,6 +115,10 @@ func TestParserRunnerAddParse(t *testing.T) {
 	}, crimes)
 }
 
+// expectedNotParsedErr is the expected error that should be thrown when a
+// field is not parsed by any of the registered parsers.
+var expectedNotParsedErr = NewErrFieldNotParsed(0, "C")
+
 // TestParserRunnerNoParserErr ensures that ParserRunner.Parse throws an error
 // when a field is encountered that does not have an associated parser.
 func TestParserRunnerNoParserErr(t *testing.T) {
@@ -129,21 +133,14 @@ func TestParserRunnerNoParserErr(t *testing.T) {
 	report := &models.Report{}
 	_, err := runner.Parse(report, []string{"C", "A"})
 
-	// Save error to check later
-	errStr := ""
-	if err != nil {
-		errStr = err.Error()
-	}
-
 	// Ensure match
-	matched, err := regexp.MatchString("no parser processed "+
-		"field with index [0-9]*, field: .*", errStr)
-	if err != nil {
-		t.Fatalf("error matching ParserRunner.Parse error: %s",
+	if err == nil {
+		t.Fatalf("no error")
+	} else if err.Error() != expectedNotParsedErr.Error() {
+		t.Fatalf("error does not match expected, \n"+
+			"expected: \"%s\"\n"+
+			"actual  : \"%s\"", expectedNotParsedErr.Error(),
 			err.Error())
-	} else if !matched {
-		t.Fatalf("ParserRunner.Parse error does not match expected "+
-			"pattern, actual: \"%s\"", errStr)
 	}
 }
 

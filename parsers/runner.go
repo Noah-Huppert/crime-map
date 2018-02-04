@@ -83,9 +83,7 @@ func (r ParserRunner) Parse(report *models.Report, fields []string) ([]*models.C
 				// and no delta value > 0
 
 				// If not parsed, error
-				return nil, fmt.Errorf("no parser processed field with index"+
-					" %d, field: %s", fI, fields[fI])
-
+				return nil, NewErrFieldNotParsed(fI, fields[fI])
 			}
 		}
 	}
