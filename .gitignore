@@ -1,5 +1,6 @@
 # Go dependencies
-vendor
+vendor/
 
-!config.go
+# Application
 config.*
+test_out/

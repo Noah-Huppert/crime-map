@@ -129,8 +129,8 @@ func (l GeoLoc) String() string {
 		"PostalAddr: %s\n"+
 		"Accuracy: %s\n"+
 		"BoundsProvided: %t\n"+
-		"BoundsID: %d\n"+
-		"ViewportBoundsID: %d\n"+
+		"BoundsID: %v\n"+
+		"ViewportBoundsID: %v\n"+
 		"GAPIPlaceID: %s\n"+
 		"Raw: %s",
 		l.ID, l.Located, l.GAPISuccess, l.Lat, l.Long, l.PostalAddr,

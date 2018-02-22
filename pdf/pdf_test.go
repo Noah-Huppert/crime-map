@@ -34,7 +34,7 @@ func TestReadsFields(t *testing.T) {
 	}
 
 	pages, parsed := file.Pages()
-	t.Logf("pages: %d, parsed: %\n", pages, parsed)
+	t.Logf("pages: %d, parsed: %t\n", pages, parsed)
 	t.Logf("expected: %s\n=========\n========\nactual: %s\n", FieldsFileContents, fields)
 
 	str.SlicesEq(t, FieldsFileContents, fields)

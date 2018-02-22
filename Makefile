@@ -1,4 +1,8 @@
-.PHONY: run test t imports fmt db rdb db-rm db-stop view view-test-pdf
+.PHONY: run \
+	test t coverage \
+	imports fmt \
+	db rdb db-rm db-stop \
+	view view-test-pdf
 
 # General
 APP_ENV=develop
@@ -19,7 +23,9 @@ TST_DAT_DIR=test_data
 TST_SRC="${TST_DAT_DIR}/fields.pdf"
 
 TST_OUT_DIR=test_out
+TST_COVER_FILE="coverage.out"
 TST_COVER_PATH="${TST_OUT_DIR}/coverage.out"
+TST_COVER_MODE="count"
 
 # Runs the server
 run:
@@ -27,7 +33,15 @@ run:
 
 # Test checks that the application code is functioning properly
 test:
-	go test -cover ./...
+	mkdir -p ${TST_OUT_DIR}
+	go test -outputdir ${TST_OUT_DIR} \
+		-coverprofile ${TST_COVER_FILE} \
+		-covermode ${TST_COVER_MODE} \
+		./...
+
+# Coverage displays the HTML go coverage report from tests
+coverage:
+	go tool cover -html ${TST_COVER_PATH}
 
 # Shortcut for test target
 t: test
