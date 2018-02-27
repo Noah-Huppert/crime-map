@@ -94,7 +94,7 @@ func TestOnceErrors(t *testing.T) {
 
 	if (err == nil) || (err.Error() != expectedErrStr) {
 		t.Fatalf("error does not match expected: %s, actual: %s",
-			expectedErrStr, err.Error())
+			expectedErrStr, err)
 	}
 }
 
@@ -128,6 +128,6 @@ func TestOnceNoParseErrs(t *testing.T) {
 
 	if (err == nil) || (err != expectedErr) {
 		t.Fatalf("error did not match expected: %s, actual: %s",
-			expectedErr, err.Error())
+			expectedErr, err)
 	}
 }

@@ -17,3 +17,7 @@ var ErrNotParsed error = errors.New("no data parsed")
 // to a list of parsed crimes. Then create a new empty crime model. And provide
 // this on the next invocation of the parser.
 var ErrCrimeParsed error = errors.New("crime has been successfully parsed")
+
+// ErrUnknownUniv indicates the provided University is not known to the system
+var ErrUnknownUniv error = errors.New("error determining university, no field " +
+	"with university name found")

@@ -1,10 +1,10 @@
 package parsers
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/Noah-Huppert/crime-map/errs"
 	"github.com/Noah-Huppert/crime-map/models"
 )
 
@@ -57,6 +57,5 @@ func determineUniversity(fields []string) (models.UniversityType, error) {
 	}
 
 	// If none found
-	return models.UniversityErr, errors.New("error determining university," +
-		" no field with university name found")
+	return models.UniversityErr, errs.ErrUnknownUniv
 }
