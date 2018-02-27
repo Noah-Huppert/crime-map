@@ -11,7 +11,7 @@ import (
 )
 
 // Reader takes in a Pdf file, and extracts crimes from it. Using the
-// appropriate parser, based on the header.
+// appropriate parser based on the report header.
 type Reader struct {
 	// geoCache is used to cache GeoLoc queries
 	geoCache *geo.GeoCache
@@ -37,7 +37,7 @@ func (r Reader) Crimes() ([]models.Crime, bool) {
 }
 */
 
-// Parse interprets a crime report file and returns the contained crimes.
+// Parse interprets a crime report file and returns the crimes it contains.
 // Additionally an error will be returned, nil on success.
 func (r *Reader) Parse(path string) ([]*models.Crime, error) {
 	// Pre parse report information
@@ -65,20 +65,22 @@ func (r *Reader) Parse(path string) ([]*models.Crime, error) {
 	return crimes, nil
 }
 
-// preParseReport determines some preliminary information about the pdf report
-// being parsed. Such as the date range covered and the number of pages.
+// preParseReport determines the number of pages, university, and date range
+// of the report being parsed.
 //
-// If a Report model is found in the database it will be queried. If not one
-// will be inserted. The Report model will be returned, with a populated
-// Report.ID field.
+// This information is used to determine if the provided report has already
+// been parsed. If the report has been parsed it is retrieved from the database.
+// Otherwise a new report is inserted.
 //
-// Additionally an error will be returned if one occurs, nil on success.
+// A pdf.Pdf instance for the specified report file is returned. Along with a
+// models.Report instance holdings the number of pages, university, and date
+// range. Lastly an error is returned, nil on success.
 func (r Reader) preParseReport(path string) (*pdf.Pdf, *models.Report, error) {
 	// Open pdf
 	file := pdf.NewPdf(path)
 
 	// Parse PDF
-	if _, err := file.Parse(); err != nil {
+	if fields, err := file.Parse(); err != nil {
 		return nil, nil, fmt.Errorf("error parsing pdf: %s", err.Error())
 	}
 
@@ -93,12 +95,6 @@ func (r Reader) preParseReport(path string) (*pdf.Pdf, *models.Report, error) {
 		return nil, nil, errs.ErrNotParsed
 	}
 	report.Pages = pages
-
-	// Get report fields to parse addition metadata
-	fields, parsed := file.Fields()
-	if !parsed {
-		return nil, nil, errs.ErrNotParsed
-	}
 
 	// Determine university
 	univ, err := determineUniversity(fields)
@@ -127,6 +123,8 @@ func (r Reader) preParseReport(path string) (*pdf.Pdf, *models.Report, error) {
 	return file, report, nil
 }
 
+// parseReport extracts crimes from the provided pdf.Pdf file. And returns them.
+// Along with an error if one occurs, nil on success.
 func (r Reader) parseReport(file *pdf.Pdf, report *models.Report) ([]*models.Crime, error) {
 	// Use parser based on university
 	var runner *ParserRunner
@@ -161,8 +159,8 @@ func (r Reader) parseReport(file *pdf.Pdf, report *models.Report) ([]*models.Cri
 	return crimes, nil
 }
 
-// updateReportPost sets the ParseSuccess and CrimesCount properties of the
-// Report model associated with the parsing job.
+// updateReportPost sets and saves the ParseSuccess and CrimesCount properties
+// of the Report model associated with the parsing job.
 func (r Reader) updateReportPost(count uint, report *models.Report) error {
 	// Get number of crimes parsed
 	report.CrimesCount = count
