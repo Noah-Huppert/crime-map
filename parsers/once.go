@@ -32,7 +32,7 @@ func (r OnceRunner) Parse(report *models.Report, crime *models.Crime, fields []s
 		count, err := r.parser.Parse(uint(i), fields, report, crime)
 
 		// On error
-		if (err != nil) && (err == errs.ErrCrimeParsed) {
+		if (err != nil) && (err != errs.ErrCrimeParsed) {
 			return fmt.Errorf("error parsing field with index"+
 				": %d, field: %s, err: %s", i, field, err.Error())
 		}
