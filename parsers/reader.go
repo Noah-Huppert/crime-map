@@ -80,7 +80,8 @@ func (r Reader) preParseReport(path string) (*pdf.Pdf, *models.Report, error) {
 	file := pdf.NewPdf(path)
 
 	// Parse PDF
-	if fields, err := file.Parse(); err != nil {
+	fields, err := file.Parse()
+	if err != nil {
 		return nil, nil, fmt.Errorf("error parsing pdf: %s", err.Error())
 	}
 

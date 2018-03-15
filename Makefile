@@ -63,13 +63,13 @@ db:
 	docker run \
 		--name ${DB_DOCKER_NAME} \
 		--net=host \
+		-it \
+		--rm \
 		-p ${DB_PORT}:${DB_PORT} \
 		-e POSTGRES_USER=${DB_USER} \
 		-e POSTGRES_PASSWORD=${DB_PASSWORD} \
 		-e POSTGRES_DB=${DB_NAME} \
-		postgres \
-	|| \
-	docker start -ai $(shell docker ps -qaf name=${DB_DOCKER_NAME})
+		postgres 
 
 # Re-sets-up and starts the database
 rdb: db-rm db
